@@ -115,6 +115,30 @@ class Pet(var bornAt: Long) {
         pers = best
     }
 
+    /** Fine di genitori/vacanza: applica i bonus e ritorna il tipo di assenza appena terminata. */
+    fun finishAway(): Int {
+        val kind = awayKind
+        when (kind) {
+            1 -> {
+                hunger = maxOf(hunger, 60f)
+                hygiene = maxOf(hygiene, 60f)
+                smarts += 5f
+                happy += 5f
+            }
+            2 -> {
+                happy = 100f
+                energy = 100f
+                hygiene = 100f
+                hunger = maxOf(hunger, 60f)
+                coins += 20
+            }
+        }
+        awayKind = 0
+        awayUntil = 0L
+        clamp()
+        return kind
+    }
+
     private fun die(why: String, at: Long) {
         dead = true
         cause = why

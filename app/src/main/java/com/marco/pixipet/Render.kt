@@ -29,6 +29,7 @@ fun PixiGame.render(now: Long) {
         Scr.PLAYLIST -> drawListScreen("PLAY")
         Scr.MAP -> drawListScreen("MAP")
         Scr.SETTINGS -> drawListScreen("SETUP")
+        Scr.DEBUG -> drawListScreen("DEBUG")
         Scr.STATS -> drawStats(now)
         Scr.PARK, Scr.SCHOOL, Scr.STAND, Scr.UNDER -> drawLocation(now)
         Scr.ANIM -> drawAnim(now)
@@ -281,9 +282,10 @@ private fun PixiGame.drawHomeScene(now: Long) {
 
 private fun PixiGame.drawHud(now: Long) {
     val f = fb
+    f.shadeRect(0, 0, W, 10, 0.5f, PANEL)
     drawCoin(f, 5, 5)
-    f.textO("${pet.coins}", 10, 3, WHITE)
-    f.textO(pet.name, W / 2 - f.tw(pet.name) / 2 + 3, 3, WHITE)
+    f.text("${pet.coins}", 10, 2, WHITE)
+    f.text(pet.name, W / 2 - f.tw(pet.name) / 2 + 3, 2, WHITE)
     if (pet.dead || away()) return
     if ((now / 500L) % 2L == 0L) return
     var x = W - 11

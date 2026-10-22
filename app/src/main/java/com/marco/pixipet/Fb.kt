@@ -107,8 +107,17 @@ class Fb(val w: Int, val h: Int) {
 
     /** Testo con ombra scura, leggibile su qualsiasi sfondo. */
     fun textO(t: String, x: Int, y: Int, c: Int, shadow: Int = col(0x2A2340)) {
-        text(t, x + 1, y + 1, shadow)
+        text(t, x - 1, y, shadow)
+        text(t, x + 1, y, shadow)
+        text(t, x, y - 1, shadow)
+        text(t, x, y + 1, shadow)
         text(t, x, y, c)
+    }
+
+    fun shadeRect(x: Int, y: Int, rw: Int, rh: Int, t: Float, target: Int) {
+        for (j in y until y + rh) for (i in x until x + rw) {
+            if (i >= 0 && j >= 0 && i < w && j < h) px[j * w + i] = mix(px[j * w + i], target, t)
+        }
     }
 
     fun blit(src: Fb, x: Int, y: Int, flip: Boolean = false) {

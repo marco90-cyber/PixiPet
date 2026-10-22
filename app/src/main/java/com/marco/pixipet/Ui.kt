@@ -11,10 +11,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
@@ -41,6 +39,7 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -63,78 +62,36 @@ fun PixiPetApp(game: PixiGame) {
     }
 
     val body = shellColor(game.shellIdx)
-    val bodyLight = tone(body, 0.45f, Color.White)
-    val bodyDark = tone(body, 0.28f, Color.Black)
+    val light = tone(body, 0.5f, Color.White)
+    val dark = tone(body, 0.3f, Color.Black)
     val shell = game.showShell
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Color(0xFF3A2F5B), Color(0xFF1E1833))))
-            .windowInsetsPadding(WindowInsets.systemBars),
-        contentAlignment = Alignment.Center
-    ) {
-        BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            val side = minOf(
-                maxWidth * (if (shell) 0.80f else 0.96f),
-                maxHeight - (if (shell) 230.dp else 130.dp)
-            ).coerceAtLeast(180.dp)
+    val bg = if (shell) {
+        Brush.verticalGradient(listOf(light, body))
+    } else {
+        Brush.verticalGradient(listOf(Color(0xFF1E1833), Color(0xFF14111F)))
+    }
 
-            val deviceModifier = if (shell) {
-                val shape = RoundedCornerShape(
-                    topStart = 160.dp, topEnd = 160.dp, bottomStart = 120.dp, bottomEnd = 120.dp
-                )
+    // Il guscio occupa tutta la finestra (anche sotto le barre di sistema).
+    Box(Modifier.fillMaxSize().background(bg)) {
+        if (shell) {
+            Box(
                 Modifier
-                    .background(Brush.verticalGradient(listOf(bodyLight, body)), shape)
-                    .border(3.dp, bodyDark, shape)
-                    .padding(start = 22.dp, end = 22.dp, top = 38.dp, bottom = 26.dp)
+                    .fillMaxSize()
+                    .padding(5.dp)
+                    .border(2.dp, dark.copy(alpha = 0.55f), RoundedCornerShape(36.dp))
+            )
+        }
+        BoxWithConstraints(
+            Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.systemBars)
+        ) {
+            val landscape = maxWidth > maxHeight * 1.05f
+            if (landscape) {
+                LandscapeLayout(game, maxWidth, maxHeight, shell, light, dark)
             } else {
-                Modifier
-            }
-
-            Column(deviceModifier, horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(
-                    Modifier
-                        .size(side)
-                        .background(Color(0xFF15131C), RoundedCornerShape(14.dp))
-                        .padding(8.dp)
-                ) {
-                    Canvas(
-                        Modifier
-                            .fillMaxSize()
-                            .clip(RoundedCornerShape(6.dp))
-                            .pointerInput(Unit) {
-                                detectTapGestures { o ->
-                                    game.tapScreen(o.x / size.width, o.y / size.height)
-                                }
-                            }
-                            .pointerInput(Unit) {
-                                detectHorizontalDragGestures { change, _ ->
-                                    game.dragScreen(change.position.x / size.width)
-                                }
-                            }
-                    ) {
-                        val img = game.image
-                        if (img != null) {
-                            drawImage(
-                                img,
-                                dstSize = IntSize(size.width.toInt(), size.height.toInt()),
-                                filterQuality = FilterQuality.None
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(22.dp))
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(22.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    ShellButton("◀", bodyLight, bodyDark, shell) { game.press(0) }
-                    ShellButton("●", bodyLight, bodyDark, shell) { game.press(1) }
-                    ShellButton("▶", bodyLight, bodyDark, shell) { game.press(2) }
-                }
+                PortraitLayout(game, maxWidth, maxHeight, shell, light, dark)
             }
         }
     }
@@ -164,13 +121,125 @@ fun PixiPetApp(game: PixiGame) {
     }
 }
 
+/** Telefono in verticale: logo in alto, schermo grande, 3 pulsanti in basso. */
 @Composable
-private fun ShellButton(label: String, light: Color, dark: Color, shell: Boolean, onClick: () -> Unit) {
-    val face = if (shell) tone(light, 0.0f, light) else Color(0xFF3A3358)
+private fun PortraitLayout(
+    game: PixiGame, w: Dp, h: Dp, shell: Boolean, light: Color, dark: Color
+) {
+    val margin = if (shell) 18.dp else 8.dp
+    val btn = (w * 0.18f).coerceIn(52.dp, 88.dp)
+    val header = if (shell) 56.dp else 0.dp
+    val availH = h - btn - header - 48.dp
+    val side = minOf(w - margin * 2, availH).coerceAtLeast(160.dp)
+
+    Column(
+        Modifier.fillMaxSize().padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceEvenly
+    ) {
+        if (shell) Header(dark)
+        ScreenView(game, side, shell)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(btn * 0.5f),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ShellButton("◀", btn, light, dark, shell) { game.press(0) }
+            ShellButton("●", btn, light, dark, shell) { game.press(1) }
+            ShellButton("▶", btn, light, dark, shell) { game.press(2) }
+        }
+    }
+}
+
+/** Tablet o telefono girato: schermo al centro, ◀ a sinistra, ● e ▶ a destra. */
+@Composable
+private fun LandscapeLayout(
+    game: PixiGame, w: Dp, h: Dp, shell: Boolean, light: Color, dark: Color
+) {
+    val btn = (h * 0.2f).coerceIn(48.dp, 80.dp)
+    val side = minOf(h - 24.dp, w - btn * 2 - 64.dp).coerceAtLeast(140.dp)
+
+    Row(
+        Modifier.fillMaxSize().padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ShellButton("◀", btn, light, dark, shell) { game.press(0) }
+        ScreenView(game, side, shell)
+        Column(
+            verticalArrangement = Arrangement.spacedBy(btn * 0.4f),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            ShellButton("●", btn, light, dark, shell) { game.press(1) }
+            ShellButton("▶", btn, light, dark, shell) { game.press(2) }
+        }
+    }
+}
+
+@Composable
+private fun Header(dark: Color) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            Modifier
+                .size(22.dp)
+                .border(3.dp, dark, CircleShape)
+        )
+        Text(
+            "PIXIPET",
+            color = dark,
+            fontSize = 13.sp,
+            letterSpacing = 5.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+    }
+}
+
+@Composable
+private fun ScreenView(game: PixiGame, side: Dp, shell: Boolean) {
+    val bezel = if (shell) 10.dp else 0.dp
+    Box(
+        Modifier
+            .size(side)
+            .background(Color(0xFF15131C), RoundedCornerShape(if (shell) 18.dp else 8.dp))
+            .padding(bezel)
+    ) {
+        Canvas(
+            Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(if (shell) 8.dp else 6.dp))
+                .pointerInput(Unit) {
+                    detectTapGestures { o ->
+                        game.tapScreen(o.x / size.width, o.y / size.height)
+                    }
+                }
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures { change, _ ->
+                        game.dragScreen(change.position.x / size.width)
+                    }
+                }
+        ) {
+            val img = game.image
+            if (img != null) {
+                drawImage(
+                    img,
+                    dstSize = IntSize(size.width.toInt(), size.height.toInt()),
+                    filterQuality = FilterQuality.None
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ShellButton(
+    label: String, size: Dp, light: Color, dark: Color, shell: Boolean, onClick: () -> Unit
+) {
+    val face = if (shell) light else Color(0xFF3A3358)
     val rim = if (shell) dark else Color(0xFF5B4B8A)
     Box(
         Modifier
-            .size(56.dp)
+            .size(size)
             .background(face, CircleShape)
             .border(3.dp, rim, CircleShape)
             .clip(CircleShape)
@@ -180,7 +249,7 @@ private fun ShellButton(label: String, light: Color, dark: Color, shell: Boolean
         Text(
             label,
             color = if (shell) dark else Color.White,
-            fontSize = 18.sp,
+            fontSize = (size.value * 0.36f).sp,
             fontWeight = FontWeight.Bold,
             fontFamily = FontFamily.Monospace
         )

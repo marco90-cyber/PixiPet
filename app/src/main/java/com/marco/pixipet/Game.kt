@@ -18,7 +18,7 @@ import kotlin.random.Random
 
 enum class Scr {
     HOME, MENU, FOOD, PLAYLIST, MAP, STATS, SETTINGS, PARK, SCHOOL, STAND, UNDER,
-    ANIM, G_CATCH, G_HILO, G_SWING, G_END, DEAD
+    ANIM, G_CATCH, G_HILO, G_SWING, G_END, DEAD, DEBUG
 }
 
 const val A_FEED = 1
@@ -59,6 +59,7 @@ class PixiGame(val ctx: Context) {
     var shellIdx by mutableStateOf(prefs.getInt("shell", 0))
     var showShell by mutableStateOf(prefs.getBoolean("showShell", true))
     var sound = prefs.getBoolean("sound", true)
+    var dbgAnyHour = false
 
     private val tone: ToneGenerator? = try {
         ToneGenerator(AudioManager.STREAM_MUSIC, 35)
@@ -231,7 +232,8 @@ class PixiGame(val ctx: Context) {
                 } else {
                     Item(
                         "PARENTS", "3-18H",
-                        st.ordinal in Stage.CHILD.ordinal..Stage.TEEN.ordinal && hour() in 3..17
+                        st.ordinal in Stage.CHILD.ordinal..Stage.TEEN.ordinal &&
+                            (dbgAnyHour || hour() in 3..17)
                     ) {
                         pet.awayKind = 1
                         pet.awayUntil = now() + 6L * 3600000L
@@ -261,6 +263,9 @@ class PixiGame(val ctx: Context) {
                     sound = !sound
                     prefs.edit().putBoolean("sound", sound).apply()
                 },
+                Item(if (prefs.getBoolean("notify", true)) "NOTIFY ON" else "NOTIFY OFF") {
+                    prefs.edit().putBoolean("notify", !prefs.getBoolean("notify", true)).apply()
+                },
                 Item("SHELL COLOR") {
                     shellIdx = (shellIdx + 1) % SHELLS.size
                     prefs.edit().putInt("shell", shellIdx).apply()
@@ -275,7 +280,55 @@ class PixiGame(val ctx: Context) {
                 Item(if (confirmReset) "SURE? OK=NEW" else "NEW EGG") {
                     if (confirmReset) newPet() else confirmReset = true
                 },
+                Item("DEBUG") { open(Scr.DEBUG) },
                 Item("BACK", icon = 10) { open(Scr.MENU) }
+            )
+
+            Scr.DEBUG -> listOf(
+                Item("STAGE NEXT") { dbgNextStage() },
+                Item("AGE +1H") { dbgShift(60, false) },
+                Item("AGE +1D") { dbgShift(1440, false) },
+                Item("SKIP +1H") { dbgShift(60, true) },
+                Item("SKIP +1D") { dbgShift(1440, true) },
+                Item("COINS +100") {
+                    pet.coins += 100
+                    dbg("+100 COINS")
+                },
+                Item("CANDY +10") {
+                    pet.candy += 10
+                    dbg("+10 CANDY")
+                },
+                Item("ALL FULL") { dbgFill() },
+                Item("ALL LOW") { dbgLow() },
+                Item(if (pet.sick) "CURE SICK" else "MAKE SICK") {
+                    pet.sick = !pet.sick
+                    pet.sickMin = 0f
+                    dbg(if (pet.sick) "SICK" else "CURED")
+                },
+                Item("POOP +1") {
+                    pet.poops = (pet.poops + 1).coerceAtMost(4)
+                    dbg("POOP")
+                },
+                Item("TYPE NEXT") {
+                    pet.pers = (pet.pers + 1) % 5
+                    dbg(PERS[pet.pers])
+                },
+                Item(if (pet.angel) "ANGEL OFF" else "ANGEL ON") {
+                    pet.angel = !pet.angel
+                    pet.immortal = pet.angel
+                    dbg(if (pet.angel) "ANGEL" else "MORTAL")
+                },
+                Item(if (dbgAnyHour) "ANY HOUR ON" else "ANY HOUR OFF") {
+                    dbgAnyHour = !dbgAnyHour
+                    say(if (dbgAnyHour) "PARENTS 24H" else "NORMAL HOURS")
+                },
+                Item("KILL") { dbgKill() },
+                Item("REVIVE") { dbgRevive() },
+                Item("NOTIFY TEST") {
+                    Notifier.test(ctx, pet.name)
+                    say("SENT")
+                },
+                Item("BACK", icon = 10) { open(Scr.SETTINGS) }
             )
 
             Scr.PARK -> listOf(
@@ -538,26 +591,106 @@ class PixiGame(val ctx: Context) {
     }
 
     private fun finishAway() {
-        when (pet.awayKind) {
-            1 -> {
-                pet.hunger = maxOf(pet.hunger, 60f)
-                pet.hygiene = maxOf(pet.hygiene, 60f)
-                pet.smarts += 5f
-                pet.happy += 5f
-                say("BACK HOME")
-            }
-            2 -> {
-                pet.happy = 100f
-                pet.energy = 100f
-                pet.hygiene = 100f
-                pet.hunger = maxOf(pet.hunger, 60f)
-                pet.coins += 20
-                say("WELCOME BACK")
-            }
+        when (pet.finishAway()) {
+            1 -> say("BACK HOME")
+            2 -> say("WELCOME BACK")
         }
-        pet.awayKind = 0
-        pet.awayUntil = 0L
         commit()
+    }
+
+    // ------------------------------------------------------------------ debug
+
+    private val stageStarts = floatArrayOf(
+        0f, Cfg.EGG_MIN, Cfg.BABY_MIN, Cfg.CHILD_MIN, Cfg.TEEN_MIN, Cfg.ADULT_MIN
+    )
+
+    private fun dbg(msg: String) {
+        commit()
+        say(msg)
+    }
+
+    private fun dbgNextStage() {
+        if (pet.dead) {
+            say("DEAD")
+            return
+        }
+        val next = (pet.stage(now()).ordinal + 1) % Stage.values().size
+        pet.bornAt = now() - (stageStarts[next] * 60000f).toLong() - 1000L
+        if (next < Stage.TEEN.ordinal) pet.pers = -1
+        dbg("STAGE " + Stage.values()[next].label)
+    }
+
+    /** simulate=false: cambia solo l'eta'. simulate=true: fa passare davvero il tempo (le barre calano). */
+    private fun dbgShift(min: Int, simulate: Boolean) {
+        val ms = min * 60000L
+        pet.bornAt -= ms
+        if (simulate) {
+            pet.lastTick -= ms
+            if (pet.awayKind != 0) pet.awayUntil -= ms
+        }
+        dbg(if (simulate) "TIME SKIPPED" else "AGE UP")
+    }
+
+    private fun dbgFill() {
+        pet.hunger = 100f
+        pet.hygiene = 100f
+        pet.happy = 100f
+        pet.energy = 100f
+        pet.smarts = 100f
+        pet.active = 100f
+        pet.sick = false
+        pet.sickMin = 0f
+        pet.starveMin = 0f
+        pet.poops = 0
+        pet.sleeping = false
+        dbg("ALL FULL")
+    }
+
+    private fun dbgLow() {
+        pet.hunger = 15f
+        pet.hygiene = 15f
+        pet.happy = 15f
+        pet.energy = 15f
+        dbg("ALL LOW")
+    }
+
+    private fun dbgKill() {
+        pet.dead = true
+        pet.cause = "DEBUG"
+        pet.diedAt = now()
+        commit()
+    }
+
+    private fun dbgRevive() {
+        pet.dead = false
+        pet.cause = ""
+        pet.sick = false
+        pet.sickMin = 0f
+        pet.starveMin = 0f
+        pet.hunger = 60f
+        pet.hygiene = 60f
+        pet.happy = 60f
+        pet.energy = 60f
+        pet.lastTick = now()
+        if (pet.ageMin(now()) >= Cfg.DEATH_MIN - 1f) {
+            pet.bornAt = now() - (Cfg.ADULT_MIN * 60000f).toLong()
+        }
+        if (scr == Scr.DEAD) scr = Scr.HOME
+        dbg("REVIVED")
+    }
+
+    // ----------------------------------------------------- ciclo di vita app
+
+    fun onResume() {
+        pet = loadPet()
+        lastStage = pet.stage(now())
+        Notifier.check(ctx, pet, now(), false)
+    }
+
+    fun onPause() {
+        save()
+        Notifier.onLeave(ctx, pet, now())
+        Notifier.schedule(ctx, Notifier.nextDelayMs(pet, now()))
     }
 
     // ------------------------------------------------------------- minigioco 1
