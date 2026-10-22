@@ -1,30 +1,22 @@
 # PixiPet
 
-Animaletto virtuale per Android in stile LCD (Kotlin + Jetpack Compose).
-Sprite, nome e codice sono originali: niente asset Bandai.
+Animaletto virtuale per Android in stile Tamaweb (Kotlin + Jetpack Compose).
+Sprite, scene, nome e codice sono originali: niente asset di terzi.
 
-## Come compilare l'APK
-
-1. Crea un repo su GitHub e carica il contenuto di questa cartella.
-2. Vai su **Actions → Build APK → Run workflow** (parte anche a ogni push su `main`).
-3. A fine build scarica l'artifact **PixiPet-debug-apk** e installa `app-debug.apk`.
+## Compilare l'APK
+Push su `main` (o **Actions → Build APK → Run workflow**), poi scarica l'artifact **PixiPet-debug-apk**.
 
 ## Come si gioca
+Tocca lo schermo (o premi un pulsante) per aprire il menu. ◀ ▶ spostano il cursore, ● conferma.
+Si può anche toccare direttamente le voci.
 
-Pulsanti: **◀** e **▶** scorrono le icone, **SELECT** conferma (puoi anche toccare le icone).
+- **Cura:** cibo (costa monete), bagno, pulizia cacche, coccole, medicina, sonno.
+- **Mappa:** parco (palla, appuntamenti), scuola (smarts), bancarella (lavoro, guadagni monete),
+  genitori (solo bambino/teen, dalle 3 alle 18), vacanza (200 monete), mondo sotterraneo (10 caramelle spooky).
+- **Minigiochi:** Trick or treat (prendi le caramelle, evita quelle marce), alto/basso, battuta.
+- **Personalita' ed evoluzioni:** al passaggio a teen la personalita' (dolce, furbo, sportivo, goloso, burbero)
+  dipende da come l'hai cresciuto e cambia aspetto. Stadi: uovo, baby, child, teen, adult, elder.
+- **Immortale:** nel mondo sotterraneo, con 30 caramelle spooky, diventa angelo e non muore piu' per trascuratezza.
+- **Impostazioni:** suono, colore e visibilita' del guscio, rinomina, esporta/importa salvataggio (copia negli appunti), nuovo uovo.
 
-| Icona | Azione |
-|-------|--------|
-| Forchetta | Pasto (+fame, +peso) o snack (+felicità, +peso) |
-| Bimbo | Pulizia (toglie le cacche, +igiene) |
-| Libro | Minigioco alto/basso (+Smarts) |
-| Mazza | Minigioco baseball: SELECT quando la pallina è nella zona (+Active, -peso) |
-| Lampadina | Luce: fa dormire / sveglia (l'energia si ricarica dormendo) |
-| Kit medico | Cura la malattia |
-| i | Info: stadio, età, generazione, peso, errori di cura |
-
-Il tempo scorre in tempo reale, anche ad app chiusa. Stadi: uovo (2 min), baby (1 h),
-child (6 h), teen (1 giorno), adult (3 giorni), elder (fino a 4 giorni), poi muore di vecchiaia.
-Cuore lampeggiante in alto = l'animaletto chiede attenzione. Se muore, SELECT fa nascere un nuovo uovo.
-
-I valori (durate, velocità di calo delle barre) sono in `Game.kt` (`Config` e `Pet.step`).
+Il tempo scorre in tempo reale anche ad app chiusa. Valori in `Model.kt` (`Cfg`, `Pet.step`) e `Game.kt`.

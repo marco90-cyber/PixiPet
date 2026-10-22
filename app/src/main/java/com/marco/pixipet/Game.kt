@@ -1,530 +1,630 @@
 package com.marco.pixipet
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.SharedPreferences
 import android.media.AudioManager
 import android.media.ToneGenerator
+import android.util.Base64
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.ImageBitmap
+import org.json.JSONObject
+import java.util.Calendar
+import kotlin.math.abs
 import kotlin.random.Random
 
-enum class Stage(val label: String) {
-    EGG("EGG"), BABY("BABY"), CHILD("CHILD"), TEEN("TEEN"), ADULT("ADULT"), ELDER("ELDER"), DEAD("DEAD")
+enum class Scr {
+    HOME, MENU, FOOD, PLAYLIST, MAP, STATS, SETTINGS, PARK, SCHOOL, STAND, UNDER,
+    ANIM, G_CATCH, G_HILO, G_SWING, G_END, DEAD
 }
 
-enum class Mode { HOME, FEED, PLAY, SMART, INFO }
+const val A_FEED = 1
+const val A_BATH = 2
+const val A_CLEAN = 3
+const val A_PET = 4
+const val A_MED = 5
+const val A_STUDY = 6
+const val A_WORK = 7
+const val A_BALL = 8
+const val A_DATE = 9
+const val A_TALK = 10
+const val A_ANGEL = 11
 
-enum class Anim { NONE, MEAL, SNACK, CLEAN, MED }
+val SHELLS = longArrayOf(0xFFB3D1L, 0x9FE3C8L, 0x9CCBFFL, 0xFFE38AL, 0xC7B3FFL, 0xFFB98AL, 0xF2F2F2L)
 
-/** Durate degli stadi, in minuti reali. */
-object Config {
-    const val EGG_MIN = 2f
-    const val BABY_MIN = 60f
-    const val CHILD_MIN = 360f
-    const val TEEN_MIN = 1440f
-    const val ADULT_MIN = 4320f
-    const val DEATH_MIN = 5760f
-    const val ANIM_MS = 2200L
-}
+class Item(
+    val label: String,
+    val sub: String = "",
+    val enabled: Boolean = true,
+    val icon: Int = -1,
+    val food: Int = -1,
+    val act: () -> Unit
+)
 
-class Pet(var bornAt: Long) {
-    var lastTick: Long = bornAt
-    var hunger = 70f
-    var hygiene = 90f
-    var smarts = 10f
-    var active = 25f
-    var energy = 100f
-    var happy = 60f
-    var weight = 5
-    var poops = 0
-    var sick = false
-    var sleeping = false
-    var sickMin = 0f
-    var starveMin = 0f
-    var callMin = 0f
-    var careMistakes = 0
-    var dead = false
-    var cause = ""
-    var diedAt = 0L
-    var generation = 1
+class Hit(val x: Int, val y: Int, val w: Int, val h: Int, val idx: Int)
+class Drop(var x: Float, var y: Float, val type: Int, val vy: Float)
+class Anim(val kind: Int, val t0: Long, val dur: Long, val arg: Int, val back: Scr)
 
-    fun ageMin(now: Long): Float {
-        val end = if (dead) diedAt else now
-        return ((end - bornAt) / 60000f).coerceAtLeast(0f)
-    }
+class PixiGame(val ctx: Context) {
+    val prefs: SharedPreferences = ctx.getSharedPreferences("pixipet2", Context.MODE_PRIVATE)
+    val rnd = Random(System.nanoTime())
+    val fb = Fb(W, H)
+    val hits = ArrayList<Hit>()
 
-    fun stage(now: Long): Stage {
-        if (dead) return Stage.DEAD
-        val a = ageMin(now)
-        return when {
-            a < Config.EGG_MIN -> Stage.EGG
-            a < Config.BABY_MIN -> Stage.BABY
-            a < Config.CHILD_MIN -> Stage.CHILD
-            a < Config.TEEN_MIN -> Stage.TEEN
-            a < Config.ADULT_MIN -> Stage.ADULT
-            else -> Stage.ELDER
-        }
-    }
+    var image by mutableStateOf<ImageBitmap?>(null)
+    var showRename by mutableStateOf(false)
+    var shellIdx by mutableStateOf(prefs.getInt("shell", 0))
+    var showShell by mutableStateOf(prefs.getBoolean("showShell", true))
+    var sound = prefs.getBoolean("sound", true)
 
-    val calling: Boolean
-        get() = hunger < 20f || happy < 20f || hygiene < 20f || sick || poops >= 2
-
-    fun clamp() {
-        hunger = hunger.coerceIn(0f, 100f)
-        hygiene = hygiene.coerceIn(0f, 100f)
-        smarts = smarts.coerceIn(0f, 100f)
-        active = active.coerceIn(0f, 100f)
-        energy = energy.coerceIn(0f, 100f)
-        happy = happy.coerceIn(0f, 100f)
-        weight = weight.coerceIn(1, 99)
-    }
-
-    private fun die(why: String, at: Long) {
-        dead = true
-        cause = why
-        diedAt = at
-    }
-
-    /** Simula esattamente un minuto di vita. */
-    fun step(rnd: Random) {
-        val at = lastTick + 60000L
-        lastTick = at
-        if (dead) return
-        val age = ageMin(at)
-        if (age < Config.EGG_MIN) return
-        if (age >= Config.DEATH_MIN) {
-            die("OLD AGE", at)
-            return
-        }
-
-        if (sleeping) {
-            hunger -= 0.25f
-            hygiene -= 0.1f
-            energy += 1.5f
-            happy -= 0.1f
-            if (energy >= 100f) sleeping = false
-        } else {
-            hunger -= 0.9f
-            hygiene -= 0.5f + 0.25f * poops
-            smarts -= 0.15f
-            active -= 0.35f
-            energy -= 0.5f
-            happy -= 0.45f
-            if (hunger < 25f || hygiene < 25f) happy -= 0.3f
-            if (energy <= 0f) {
-                energy = 0f
-                sleeping = true
-            }
-            if (poops < 4 && rnd.nextInt(90) == 0) poops++
-        }
-
-        if (!sick) {
-            val risk = hygiene < 15f || poops >= 3 || hunger < 8f
-            if ((risk && rnd.nextInt(60) == 0) || rnd.nextInt(2500) == 0) {
-                sick = true
-                careMistakes++
-            }
-        } else {
-            sickMin += 1f
-            happy -= 0.4f
-            if (sickMin >= 240f) {
-                clamp()
-                die("ILLNESS", at)
-                return
-            }
-        }
-
-        if (hunger <= 0f) {
-            starveMin += 1f
-            if (starveMin >= 180f) {
-                clamp()
-                die("HUNGER", at)
-                return
-            }
-        } else {
-            starveMin = (starveMin - 2f).coerceAtLeast(0f)
-        }
-
-        if (calling && !sleeping) {
-            callMin += 1f
-            if (callMin >= 30f) {
-                careMistakes++
-                callMin = 0f
-            }
-        } else {
-            callMin = 0f
-        }
-
-        clamp()
-    }
-
-    fun save(p: SharedPreferences) {
-        p.edit()
-            .putLong("bornAt", bornAt).putLong("lastTick", lastTick)
-            .putFloat("hunger", hunger).putFloat("hygiene", hygiene).putFloat("smarts", smarts)
-            .putFloat("active", active).putFloat("energy", energy).putFloat("happy", happy)
-            .putInt("weight", weight).putInt("poops", poops)
-            .putBoolean("sick", sick).putBoolean("sleeping", sleeping)
-            .putFloat("sickMin", sickMin).putFloat("starveMin", starveMin).putFloat("callMin", callMin)
-            .putInt("care", careMistakes).putBoolean("dead", dead).putString("cause", cause)
-            .putLong("diedAt", diedAt).putInt("gen", generation)
-            .apply()
-    }
-
-    companion object {
-        fun load(p: SharedPreferences): Pet? {
-            if (!p.contains("bornAt")) return null
-            val pet = Pet(p.getLong("bornAt", System.currentTimeMillis()))
-            pet.lastTick = p.getLong("lastTick", pet.bornAt)
-            pet.hunger = p.getFloat("hunger", 70f)
-            pet.hygiene = p.getFloat("hygiene", 90f)
-            pet.smarts = p.getFloat("smarts", 10f)
-            pet.active = p.getFloat("active", 25f)
-            pet.energy = p.getFloat("energy", 100f)
-            pet.happy = p.getFloat("happy", 60f)
-            pet.weight = p.getInt("weight", 5)
-            pet.poops = p.getInt("poops", 0)
-            pet.sick = p.getBoolean("sick", false)
-            pet.sleeping = p.getBoolean("sleeping", false)
-            pet.sickMin = p.getFloat("sickMin", 0f)
-            pet.starveMin = p.getFloat("starveMin", 0f)
-            pet.callMin = p.getFloat("callMin", 0f)
-            pet.careMistakes = p.getInt("care", 0)
-            pet.dead = p.getBoolean("dead", false)
-            pet.cause = p.getString("cause", "") ?: ""
-            pet.diedAt = p.getLong("diedAt", 0L)
-            pet.generation = p.getInt("gen", 1)
-            return pet
-        }
-    }
-}
-
-class PixiGame(ctx: Context) {
-    private val prefs: SharedPreferences = ctx.getSharedPreferences("pixipet", Context.MODE_PRIVATE)
-    private val rnd = Random(System.nanoTime())
     private val tone: ToneGenerator? = try {
         ToneGenerator(AudioManager.STREAM_MUSIC, 35)
     } catch (e: Throwable) {
         null
     }
 
-    var pet by mutableStateOf(Pet.load(prefs) ?: Pet(System.currentTimeMillis()))
-    var rev by mutableIntStateOf(0)
-    var frame by mutableLongStateOf(0L)
+    var pet: Pet = loadPet()
+    var scr = Scr.HOME
+    var cursor = 0
+    var anim: Anim? = null
+    var toast = ""
+    var toastUntil = 0L
+    var petX = 40f
+    var facingLeft = false
+    var nextMove = 0L
+    var statsPage = 0
+    var confirmReset = false
+    var wasCalling = false
+    var lastStage: Stage = pet.stage(System.currentTimeMillis())
+    var dateOk = false
 
-    var mode by mutableStateOf(Mode.HOME)
-    var sel by mutableIntStateOf(0)
-    var sub by mutableIntStateOf(0)
+    // fine partita
+    var endLines: List<String> = emptyList()
+    var endBack = Scr.HOME
 
-    var anim by mutableStateOf(Anim.NONE)
-    var animT0 = 0L
+    // minigioco: caramelle
+    val drops = ArrayList<Drop>()
+    var bx = 40f
+    var cScore = 0
+    var cCandy = 0
+    var cLives = 3
+    var cEnd = 0L
+    var cSpawn = 0L
+    var cLast = 0L
 
-    var toast by mutableStateOf("")
-    private var toastUntil = 0L
-
-    var petX by mutableIntStateOf(8)
-    var facingLeft by mutableStateOf(false)
-    private var nextMove = 0L
-    private var lastStage: Stage = pet.stage(System.currentTimeMillis())
-
-    // --- minigioco PLAY (baseball) ---
-    var pRound = 1
-    var pHits = 0
-    var ballX = 31f
-    var pPhase = 0          // 0 corsa, 1 colpito, 2 mancato, 3 finale
-    var pPhaseT0 = 0L
-    var swingUntil = 0L
-    private var swung = false
-    private var lastFrame = 0L
-
-    // --- minigioco SMART (alto/basso) ---
+    // minigioco: alto/basso
     var sRound = 1
     var sCorrect = 0
     var sNum = 5
     var sNext = 5
-    var sPhase = 0          // 0 scelta, 1 giusto, 2 sbagliato, 3 finale
+    var sPhase = 0
     var sT0 = 0L
+
+    // minigioco: battuta
+    var wRound = 1
+    var wHits = 0
+    var ballX = 78f
+    var wPhase = 0
+    var wT0 = 0L
+    var swingUntil = 0L
+    var wLast = 0L
 
     init {
         save()
     }
 
+    // ---------------------------------------------------------------- utilita'
+
+    fun now(): Long = System.currentTimeMillis()
+
+    fun hour(): Int = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+
+    fun isNight(): Boolean = hour() >= 21 || hour() < 7
+
+    fun away(): Boolean = pet.awayKind != 0
+
+    private fun newPetObj(n: Long, gen: Int): Pet {
+        val p = Pet(n)
+        p.name = NAMES.random(rnd)
+        p.hue = rnd.nextInt(5)
+        p.generation = gen
+        return p
+    }
+
+    private fun loadPet(): Pet {
+        val s = prefs.getString("pet", null)
+        if (s != null) {
+            try {
+                return Pet.fromJson(JSONObject(s))
+            } catch (e: Throwable) {
+            }
+        }
+        return newPetObj(System.currentTimeMillis(), 1)
+    }
+
     fun save() {
-        pet.save(prefs)
+        prefs.edit().putString("pet", pet.toJson().toString()).apply()
     }
 
     private fun commit() {
         pet.clamp()
-        rev++
         save()
     }
 
-    private fun beep() {
+    fun say(t: String) {
+        toast = t
+        toastUntil = now() + 1700L
+    }
+
+    fun beep() {
+        if (!sound) return
         try {
             tone?.startTone(ToneGenerator.TONE_PROP_BEEP, 40)
         } catch (e: Throwable) {
         }
     }
 
-    private fun say(text: String, now: Long) {
-        toast = text
-        toastUntil = now + 1500L
+    fun open(s: Scr) {
+        scr = s
+        cursor = 0
+        confirmReset = false
     }
 
-    // ------------------------------------------------------------------ loop
+    // ------------------------------------------------------------------ liste
 
-    fun update(now: Long) {
-        frame = now
+    fun items(): List<Item> {
+        val st = pet.stage(now())
+        val egg = st == Stage.EGG
+        val gone = away()
+        val asleep = pet.sleeping
+        val free = !egg && !asleep && !gone
+        val child = st.atLeast(Stage.CHILD)
+        val teen = st.atLeast(Stage.TEEN)
 
-        var changed = false
-        var guard = 0
-        while (now - pet.lastTick >= 60000L && guard < 200000) {
-            pet.step(rnd)
-            guard++
-            changed = true
-        }
-        if (changed) commit()
+        return when (scr) {
+            Scr.MENU -> listOf(
+                Item("FEED", enabled = free, icon = 0) { open(Scr.FOOD) },
+                Item("BATH", enabled = free, icon = 1) { startAnim(A_BATH, 2800L, 0, Scr.HOME) },
+                Item("CLEAN", enabled = free, icon = 2) {
+                    if (pet.poops > 0) startAnim(A_CLEAN, 2400L, 0, Scr.HOME) else say("ALL CLEAN")
+                },
+                Item("PET", enabled = free, icon = 3) { startAnim(A_PET, 2400L, 0, Scr.HOME) },
+                Item("PLAY", enabled = free && child, icon = 4) { open(Scr.PLAYLIST) },
+                Item("MAP", enabled = !egg && !asleep, icon = 5) { open(Scr.MAP) },
+                Item("STATS", icon = 6) { open(Scr.STATS) },
+                Item(if (asleep) "WAKE" else "SLEEP", enabled = !egg && !gone, icon = 11) { toggleSleep() },
+                Item("MEDS", enabled = free && pet.sick, icon = 8) {
+                    if (pet.coins >= 10) pet.coins -= 10
+                    startAnim(A_MED, 2600L, 0, Scr.HOME)
+                },
+                Item("SETUP", icon = 9) { open(Scr.SETTINGS) },
+                Item("BACK", icon = 10) { scr = Scr.HOME }
+            )
 
-        val st = pet.stage(now)
-        if (st != lastStage) {
-            if (st != Stage.DEAD) {
-                say(if (lastStage == Stage.EGG) "HATCH!" else "GROW!", now)
-                beep()
-            }
-            lastStage = st
-            rev++
-        }
-
-        if (toast.isNotEmpty() && now > toastUntil) toast = ""
-        if (anim != Anim.NONE && now - animT0 >= Config.ANIM_MS) finishAnim()
-
-        when (mode) {
-            Mode.PLAY -> updatePlay(now)
-            Mode.SMART -> updateSmart(now)
-            else -> {}
-        }
-
-        // passeggiata dell'animaletto
-        if (mode == Mode.HOME && anim == Anim.NONE && !pet.sleeping && !pet.dead &&
-            st != Stage.EGG && now > nextMove
-        ) {
-            if (rnd.nextInt(100) < 65) {
-                val dir = if (facingLeft) -1 else 1
-                var nx = petX + dir
-                if (nx < 3 || nx > 13) {
-                    facingLeft = !facingLeft
-                    nx = petX - dir
+            Scr.FOOD -> FOODS.mapIndexed { i, f ->
+                Item(f.name, "${f.price}C", pet.coins >= f.price, food = f.kind) {
+                    pet.coins -= f.price
+                    startAnim(A_FEED, 2400L, i, Scr.HOME)
                 }
-                petX = nx
-            } else if (rnd.nextInt(100) < 30) {
-                facingLeft = !facingLeft
-            }
-            nextMove = now + 600L + rnd.nextInt(900)
-        }
-    }
+            } + Item("BACK", icon = 10) { open(Scr.MENU) }
 
-    // ----------------------------------------------------------------- input
+            Scr.PLAYLIST -> listOf(
+                Item("TRICK TREAT", "E-10", pet.energy >= 15f, icon = 15) { startCatch(now()) },
+                Item("HI-LO", "E-8", pet.energy >= 15f, icon = 16) { startHilo(now()) },
+                Item("SWING", "E-12", pet.energy >= 15f, icon = 4) { startSwing(now()) },
+                Item("BACK", icon = 10) { open(Scr.MENU) }
+            )
 
-    fun onLeft() {
-        beep()
-        input(-1)
-    }
-
-    fun onRight() {
-        beep()
-        input(1)
-    }
-
-    fun onSelect() {
-        beep()
-        input(0)
-    }
-
-    fun pickIcon(i: Int) {
-        if (mode == Mode.HOME && anim == Anim.NONE && !pet.dead) {
-            sel = i
-            beep()
-        }
-    }
-
-    private fun input(d: Int) {
-        val now = System.currentTimeMillis()
-        if (pet.dead) {
-            if (d == 0) newPet(now)
-            return
-        }
-        if (anim != Anim.NONE) return
-        when (mode) {
-            Mode.HOME -> if (d != 0) sel = (sel + d + 7) % 7 else activate(now)
-            Mode.FEED -> if (d != 0) sub = (sub + d + 3) % 3 else feedChoose(now)
-            Mode.INFO -> if (d != 0) sub = (sub + d + 3) % 3 else mode = Mode.HOME
-            Mode.PLAY -> playInput(d, now)
-            Mode.SMART -> smartInput(d, now)
-        }
-    }
-
-    private fun activate(now: Long) {
-        val st = pet.stage(now)
-        if (st == Stage.EGG && sel != 6) {
-            say("WAIT", now)
-            return
-        }
-        if (pet.sleeping && sel != 4 && sel != 6) {
-            say("ZZZ", now)
-            return
-        }
-        when (sel) {
-            0 -> {
-                mode = Mode.FEED
-                sub = 0
-            }
-            1 -> startAnim(Anim.CLEAN, now)
-            2 -> startSmart(now)
-            3 -> startPlay(now)
-            4 -> {
-                if (pet.sleeping) {
-                    pet.sleeping = false
-                    commit()
-                } else if (pet.energy >= 90f) {
-                    say("AWAKE", now)
+            Scr.MAP -> listOf(
+                Item("HOME") { scr = Scr.HOME; cursor = 0 },
+                Item("PARK", "", !gone && child) { open(Scr.PARK) },
+                Item("SCHOOL", "", !gone && child) { open(Scr.SCHOOL) },
+                Item("STAND", "WORK", !gone && teen) { open(Scr.STAND) },
+                if (gone) {
+                    Item("CALL BACK") {
+                        finishAway()
+                        scr = Scr.HOME
+                    }
                 } else {
-                    pet.sleeping = true
+                    Item(
+                        "PARENTS", "3-18H",
+                        st.ordinal in Stage.CHILD.ordinal..Stage.TEEN.ordinal && hour() in 3..17
+                    ) {
+                        pet.awayKind = 1
+                        pet.awayUntil = now() + 6L * 3600000L
+                        scr = Scr.HOME
+                        commit()
+                        say("BYE BYE")
+                    }
+                },
+                Item("UNDERWORLD", "10 CANDY", !gone && teen && pet.candy >= 10) {
+                    pet.candy -= 10
                     commit()
+                    open(Scr.UNDER)
+                },
+                Item("VACATION", "200C", !gone && !egg && pet.coins >= 200) {
+                    pet.coins -= 200
+                    pet.awayKind = 2
+                    pet.awayUntil = now() + 3600000L
+                    scr = Scr.HOME
+                    commit()
+                    say("BON VOYAGE")
+                },
+                Item("BACK", icon = 10) { open(Scr.MENU) }
+            )
+
+            Scr.SETTINGS -> listOf(
+                Item(if (sound) "SOUND ON" else "SOUND OFF") {
+                    sound = !sound
+                    prefs.edit().putBoolean("sound", sound).apply()
+                },
+                Item("SHELL COLOR") {
+                    shellIdx = (shellIdx + 1) % SHELLS.size
+                    prefs.edit().putInt("shell", shellIdx).apply()
+                },
+                Item(if (showShell) "SHELL ON" else "SHELL OFF") {
+                    showShell = !showShell
+                    prefs.edit().putBoolean("showShell", showShell).apply()
+                },
+                Item("RENAME") { showRename = true },
+                Item("EXPORT SAVE") { exportSave() },
+                Item("IMPORT SAVE") { importSave() },
+                Item(if (confirmReset) "SURE? OK=NEW" else "NEW EGG") {
+                    if (confirmReset) newPet() else confirmReset = true
+                },
+                Item("BACK", icon = 10) { open(Scr.MENU) }
+            )
+
+            Scr.PARK -> listOf(
+                Item("PLAY BALL", "E-10", pet.energy >= 15f) { startAnim(A_BALL, 3000L, 0, Scr.PARK) },
+                Item("MEET", "DATE", teen) {
+                    val chance = 0.25f + pet.happy / 200f + (if (pet.pers == 0) 0.15f else 0f)
+                    dateOk = rnd.nextFloat() < chance
+                    startAnim(A_DATE, 3600L, 0, Scr.PARK)
+                },
+                Item("BACK", icon = 10) { open(Scr.MAP) }
+            )
+
+            Scr.SCHOOL -> listOf(
+                Item("STUDY", "E-8", pet.energy >= 15f) { startAnim(A_STUDY, 5000L, 0, Scr.SCHOOL) },
+                Item("BACK", icon = 10) { open(Scr.MAP) }
+            )
+
+            Scr.STAND -> listOf(
+                Item("WORK", "E-12", pet.energy >= 20f) { startAnim(A_WORK, 5000L, 0, Scr.STAND) },
+                Item("BACK", icon = 10) { open(Scr.MAP) }
+            )
+
+            Scr.UNDER -> listOf(
+                Item("TALK ANGEL") { startAnim(A_TALK, 2600L, 0, Scr.UNDER) },
+                Item("TALK DEMON") { startAnim(A_TALK, 2600L, 1, Scr.UNDER) },
+                Item("BE ANGEL", "30 CANDY", !pet.angel && teen && pet.candy >= 30) {
+                    pet.candy -= 30
+                    startAnim(A_ANGEL, 3200L, 0, Scr.UNDER)
+                },
+                Item("LEAVE", icon = 10) { open(Scr.MAP) }
+            )
+
+            else -> emptyList()
+        }
+    }
+
+    fun activate() {
+        val its = items()
+        if (its.isEmpty()) return
+        cursor = cursor.coerceIn(0, its.size - 1)
+        val item = its[cursor]
+        if (item.enabled) item.act() else say("NOT NOW")
+    }
+
+    private fun toggleSleep() {
+        if (pet.sleeping) {
+            pet.sleeping = false
+        } else if (pet.energy >= 90f) {
+            say("NOT TIRED")
+            return
+        } else {
+            pet.sleeping = true
+        }
+        scr = Scr.HOME
+        commit()
+    }
+
+    // ------------------------------------------------------------------ input
+
+    fun press(b: Int) {
+        beep()
+        if (pet.dead || scr == Scr.DEAD) {
+            if (b == 1) newPet()
+            return
+        }
+        when (scr) {
+            Scr.ANIM -> {}
+            Scr.HOME -> open(Scr.MENU)
+            Scr.STATS -> if (b == 1) open(Scr.MENU) else statsPage = (statsPage + 1) % 2
+            Scr.G_CATCH -> {
+                if (b == 0) bx -= 9f
+                if (b == 2) bx += 9f
+                bx = bx.coerceIn(6f, 74f)
+            }
+            Scr.G_HILO -> hiloInput(b)
+            Scr.G_SWING -> if (b == 1) swingHit()
+            Scr.G_END -> if (b == 1) {
+                scr = endBack
+                cursor = 0
+            }
+            else -> {
+                val n = items().size
+                if (n == 0) return
+                when (b) {
+                    0 -> cursor = (cursor - 1 + n) % n
+                    2 -> cursor = (cursor + 1) % n
+                    else -> activate()
                 }
             }
-            5 -> if (pet.sick) startAnim(Anim.MED, now) else say("NOT SICK", now)
-            6 -> {
-                mode = Mode.INFO
-                sub = 0
+        }
+    }
+
+    fun tapScreen(fx: Float, fy: Float) {
+        val x = (fx * W).toInt().coerceIn(0, W - 1)
+        val y = (fy * H).toInt().coerceIn(0, H - 1)
+        if (pet.dead || scr == Scr.DEAD) {
+            press(1)
+            return
+        }
+        when (scr) {
+            Scr.ANIM -> {}
+            Scr.HOME -> {
+                beep()
+                open(Scr.MENU)
+            }
+            Scr.STATS -> {
+                beep()
+                open(Scr.MENU)
+            }
+            Scr.G_CATCH -> bx = x.toFloat().coerceIn(6f, 74f)
+            Scr.G_HILO -> hiloInput(if (x < W / 2) 0 else 2)
+            Scr.G_SWING -> swingHit()
+            Scr.G_END -> press(1)
+            else -> {
+                for (h in hits) {
+                    if (x >= h.x && x < h.x + h.w && y >= h.y && y < h.y + h.h) {
+                        cursor = h.idx
+                        beep()
+                        activate()
+                        return
+                    }
+                }
             }
         }
     }
 
-    private fun feedChoose(now: Long) {
-        when (sub) {
-            0 -> {
-                mode = Mode.HOME
-                if (pet.hunger >= 95f) say("FULL", now) else startAnim(Anim.MEAL, now)
-            }
-            1 -> {
-                mode = Mode.HOME
-                if (pet.happy >= 95f && pet.hunger >= 95f) say("FULL", now) else startAnim(Anim.SNACK, now)
-            }
-            else -> mode = Mode.HOME
+    fun dragScreen(fx: Float) {
+        if (scr == Scr.G_CATCH) bx = (fx * W).coerceIn(6f, 74f)
+    }
+
+    // ------------------------------------------------------------ rinomina/salva
+
+    fun rename(t: String) {
+        val clean = t.trim().uppercase().filter { it.isLetterOrDigit() }.take(8)
+        if (clean.isNotEmpty()) pet.name = clean
+        commit()
+    }
+
+    private fun exportSave() {
+        try {
+            val s = Base64.encodeToString(pet.toJson().toString().toByteArray(), Base64.NO_WRAP)
+            val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            cm.setPrimaryClip(ClipData.newPlainText("PixiPet", s))
+            say("COPIED")
+        } catch (e: Throwable) {
+            say("ERROR")
         }
     }
 
-    private fun startAnim(a: Anim, now: Long) {
-        anim = a
-        animT0 = now
+    private fun importSave() {
+        try {
+            val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val t = cm.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+            val j = JSONObject(String(Base64.decode(t.trim(), Base64.DEFAULT)))
+            pet = Pet.fromJson(j)
+            lastStage = pet.stage(now())
+            scr = Scr.HOME
+            commit()
+            say("LOADED")
+        } catch (e: Throwable) {
+            say("BAD CODE")
+        }
+    }
+
+    fun newPet() {
+        val g = if (pet.dead) pet.generation + 1 else 1
+        pet = newPetObj(now(), g)
+        scr = Scr.HOME
+        cursor = 0
+        anim = null
+        lastStage = Stage.EGG
+        petX = 40f
+        commit()
+    }
+
+    // ---------------------------------------------------------------- animazioni
+
+    fun startAnim(kind: Int, dur: Long, arg: Int, back: Scr) {
+        anim = Anim(kind, now(), dur, arg, back)
+        scr = Scr.ANIM
     }
 
     private fun finishAnim() {
-        when (anim) {
-            Anim.MEAL -> {
-                pet.hunger += 35f
-                pet.weight += 1
-                pet.happy += 3f
+        val a = anim ?: return
+        when (a.kind) {
+            A_FEED -> {
+                val f = FOODS[a.arg.coerceIn(0, FOODS.size - 1)]
+                pet.hunger += f.hunger
+                pet.happy += f.happy
+                pet.weight += f.weight
+                pet.cFood++
             }
-            Anim.SNACK -> {
-                pet.hunger += 10f
-                pet.happy += 15f
-                pet.weight += 2
-            }
-            Anim.CLEAN -> {
-                pet.poops = 0
+            A_BATH -> {
                 pet.hygiene = 100f
+                pet.happy -= 3f
             }
-            Anim.MED -> {
+            A_CLEAN -> {
+                pet.poops = 0
+                pet.hygiene += 10f
+            }
+            A_PET -> {
+                pet.happy += 10f
+                pet.cPet++
+            }
+            A_MED -> {
                 pet.sick = false
                 pet.sickMin = 0f
                 pet.happy -= 5f
             }
-            Anim.NONE -> {}
-        }
-        anim = Anim.NONE
-        commit()
-    }
-
-    private fun newPet(now: Long) {
-        val gen = pet.generation + 1
-        val p = Pet(now)
-        p.generation = gen
-        pet = p
-        mode = Mode.HOME
-        sel = 0
-        anim = Anim.NONE
-        lastStage = Stage.EGG
-        petX = 8
-        commit()
-    }
-
-    // ------------------------------------------------------------- PLAY game
-
-    private fun startPlay(now: Long) {
-        mode = Mode.PLAY
-        pRound = 1
-        pHits = 0
-        ballX = 31f
-        pPhase = 0
-        swung = false
-        swingUntil = 0L
-        lastFrame = now
-    }
-
-    private fun playInput(d: Int, now: Long) {
-        if (d != 0 || pPhase != 0 || swung) return
-        swung = true
-        swingUntil = now + 260L
-        if (ballX in 13f..20f) {
-            pHits++
-            pPhase = 1
-        } else {
-            pPhase = 2
-        }
-        pPhaseT0 = now
-    }
-
-    private fun updatePlay(now: Long) {
-        val dt = (now - lastFrame).coerceIn(0L, 100L) / 1000f
-        lastFrame = now
-        when (pPhase) {
-            0 -> {
-                ballX -= (14f + 2f * pRound) * dt
-                if (ballX < 11f) {
-                    pPhase = 2
-                    pPhaseT0 = now
-                }
+            A_STUDY -> {
+                pet.smarts += 12f
+                pet.energy -= 8f
+                pet.hunger -= 5f
+                pet.cStudy++
             }
-            1, 2 -> if (now - pPhaseT0 > 900L) {
-                if (pRound >= 5) {
-                    pPhase = 3
-                    pPhaseT0 = now
+            A_WORK -> {
+                val gain = 12 + rnd.nextInt(10) + (pet.smarts / 10f).toInt()
+                pet.coins += gain
+                pet.energy -= 12f
+                pet.hygiene -= 6f
+                say("+$gain COINS")
+            }
+            A_BALL -> {
+                pet.active += 12f
+                pet.happy += 8f
+                pet.energy -= 10f
+                pet.hunger -= 6f
+                pet.cPlay++
+            }
+            A_DATE -> {
+                if (dateOk) {
+                    pet.dates++
+                    pet.happy += 25f
+                    pet.coins += 10
+                    say(if (pet.dates == 3) "HEARTBREAKER!" else "DATE OK!")
                 } else {
-                    pRound++
-                    ballX = 31f
-                    pPhase = 0
-                    swung = false
+                    pet.happy -= 10f
+                    say("REJECTED")
                 }
             }
-            3 -> if (now - pPhaseT0 > 1800L) endPlay(now)
+            A_TALK -> {
+                if (a.arg == 0) {
+                    pet.happy += 20f
+                } else {
+                    pet.coins += 15
+                    pet.happy += 5f
+                    pet.smarts += 3f
+                }
+            }
+            A_ANGEL -> {
+                pet.angel = true
+                pet.immortal = true
+                say("IMMORTAL!")
+            }
         }
-    }
-
-    private fun endPlay(now: Long) {
-        pet.active += 8f * pHits + 5f
-        pet.happy += 5f * pHits
-        pet.energy -= 12f
-        if (pHits >= 3 && pet.weight > 1) pet.weight -= 1
-        mode = Mode.HOME
-        say(if (pHits >= 3) "WIN" else "LOSE", now)
+        anim = null
+        scr = a.back
+        cursor = 0
         commit()
     }
 
-    // ------------------------------------------------------------ SMART game
+    private fun finishAway() {
+        when (pet.awayKind) {
+            1 -> {
+                pet.hunger = maxOf(pet.hunger, 60f)
+                pet.hygiene = maxOf(pet.hygiene, 60f)
+                pet.smarts += 5f
+                pet.happy += 5f
+                say("BACK HOME")
+            }
+            2 -> {
+                pet.happy = 100f
+                pet.energy = 100f
+                pet.hygiene = 100f
+                pet.hunger = maxOf(pet.hunger, 60f)
+                pet.coins += 20
+                say("WELCOME BACK")
+            }
+        }
+        pet.awayKind = 0
+        pet.awayUntil = 0L
+        commit()
+    }
+
+    // ------------------------------------------------------------- minigioco 1
+
+    private fun startCatch(n: Long) {
+        scr = Scr.G_CATCH
+        drops.clear()
+        bx = 40f
+        cScore = 0
+        cCandy = 0
+        cLives = 3
+        cEnd = n + 30000L
+        cSpawn = n + 500L
+        cLast = n
+    }
+
+    private fun updateCatch(n: Long) {
+        val dt = (n - cLast).coerceIn(0L, 100L) / 1000f
+        cLast = n
+        if (n >= cSpawn) {
+            val r = rnd.nextInt(100)
+            val type = when {
+                r < 60 -> 0
+                r < 75 -> 1
+                else -> 2
+            }
+            drops.add(Drop(6f + rnd.nextInt(68), -4f, type, 24f + rnd.nextInt(16)))
+            cSpawn = n + 450L + rnd.nextInt(400)
+        }
+        val iter = drops.iterator()
+        while (iter.hasNext()) {
+            val d = iter.next()
+            d.y += d.vy * dt
+            if (d.y >= 64f && d.y <= 74f && abs(d.x - bx) <= 9f) {
+                when (d.type) {
+                    0 -> cScore += 1
+                    1 -> {
+                        cCandy += 1
+                        cScore += 2
+                    }
+                    else -> cLives -= 1
+                }
+                iter.remove()
+                beep()
+            } else if (d.y > 82f) {
+                iter.remove()
+            }
+        }
+        if (n >= cEnd || cLives <= 0) {
+            pet.coins += cScore
+            pet.candy += cCandy
+            pet.happy += minOf(20f, cScore * 1.5f)
+            pet.energy -= 10f
+            pet.hunger -= 5f
+            pet.games++
+            endLines = listOf("COINS +$cScore", "CANDY +$cCandy")
+            finishGame()
+        }
+    }
+
+    private fun finishGame() {
+        endBack = Scr.HOME
+        scr = Scr.G_END
+        commit()
+    }
+
+    // ------------------------------------------------------------- minigioco 2
 
     private fun pickNext(): Int {
         var n: Int
@@ -534,31 +634,31 @@ class PixiGame(ctx: Context) {
         return n
     }
 
-    private fun startSmart(now: Long) {
-        mode = Mode.SMART
+    private fun startHilo(n: Long) {
+        scr = Scr.G_HILO
         sRound = 1
         sCorrect = 0
         sNum = 1 + rnd.nextInt(9)
         sNext = pickNext()
         sPhase = 0
-        sT0 = now
+        sT0 = n
     }
 
-    private fun smartInput(d: Int, now: Long) {
-        if (sPhase != 0 || d == 0) return
-        val guessHigh = d > 0
-        val ok = (sNext > sNum) == guessHigh
+    private fun hiloInput(b: Int) {
+        if (sPhase != 0 || b == 1) return
+        val high = b == 2
+        val ok = (sNext > sNum) == high
         if (ok) sCorrect++
         sPhase = if (ok) 1 else 2
-        sT0 = now
+        sT0 = now()
     }
 
-    private fun updateSmart(now: Long) {
+    private fun updateHilo(n: Long) {
         when (sPhase) {
-            1, 2 -> if (now - sT0 > 1100L) {
+            1, 2 -> if (n - sT0 > 1100L) {
                 if (sRound >= 5) {
                     sPhase = 3
-                    sT0 = now
+                    sT0 = n
                 } else {
                     sRound++
                     sNum = sNext
@@ -566,16 +666,148 @@ class PixiGame(ctx: Context) {
                     sPhase = 0
                 }
             }
-            3 -> if (now - sT0 > 1800L) endSmart(now)
+            3 -> if (n - sT0 > 1500L) {
+                pet.coins += sCorrect * 4
+                pet.smarts += 6f * sCorrect
+                pet.happy += 3f * sCorrect
+                pet.energy -= 8f
+                pet.games++
+                endLines = listOf("RIGHT $sCorrect/5", "COINS +${sCorrect * 4}")
+                finishGame()
+            }
         }
     }
 
-    private fun endSmart(now: Long) {
-        pet.smarts += 8f * sCorrect
-        pet.happy += 3f * sCorrect
-        pet.energy -= 8f
-        mode = Mode.HOME
-        say(if (sCorrect >= 3) "WIN" else "LOSE", now)
+    // ------------------------------------------------------------- minigioco 3
+
+    private fun startSwing(n: Long) {
+        scr = Scr.G_SWING
+        wRound = 1
+        wHits = 0
+        ballX = 78f
+        wPhase = 0
+        swingUntil = 0L
+        wLast = n
+    }
+
+    private fun swingHit() {
+        if (wPhase != 0) return
+        val n = now()
+        swingUntil = n + 250L
+        if (ballX in 40f..52f) {
+            wHits++
+            wPhase = 1
+        } else {
+            wPhase = 2
+        }
+        wT0 = n
+    }
+
+    private fun updateSwing(n: Long) {
+        val dt = (n - wLast).coerceIn(0L, 100L) / 1000f
+        wLast = n
+        when (wPhase) {
+            0 -> {
+                ballX -= (20f + 4f * wRound) * dt
+                if (ballX < 30f) {
+                    wPhase = 2
+                    wT0 = n
+                }
+            }
+            1, 2 -> if (n - wT0 > 900L) {
+                if (wRound >= 5) {
+                    wPhase = 3
+                    wT0 = n
+                } else {
+                    wRound++
+                    ballX = 78f
+                    wPhase = 0
+                }
+            }
+            3 -> if (n - wT0 > 1500L) {
+                pet.coins += wHits * 5
+                pet.active += 6f * wHits + 4f
+                pet.happy += 4f * wHits
+                pet.energy -= 12f
+                pet.hunger -= 6f
+                pet.cPlay++
+                pet.games++
+                endLines = listOf("HITS $wHits/5", "COINS +${wHits * 5}")
+                finishGame()
+            }
+        }
+    }
+
+    // --------------------------------------------------------------- ciclo
+
+    private fun onStage(st: Stage, n: Long) {
+        if (st != Stage.EGG) {
+            say(if (lastStage == Stage.EGG) "HATCHED!" else "GREW UP!")
+            beep()
+        }
+        lastStage = st
         commit()
+    }
+
+    fun update(n: Long) {
+        var changed = false
+        var guard = 0
+        while (n - pet.lastTick >= 60000L && guard < 300000) {
+            pet.step(rnd)
+            guard++
+            changed = true
+        }
+        if (changed) commit()
+
+        if (pet.awayKind != 0 && n >= pet.awayUntil) finishAway()
+
+        val st = pet.stage(n)
+        if (st != lastStage) onStage(st, n)
+        if (pet.pers < 0 && st.atLeast(Stage.TEEN)) {
+            pet.assignPers()
+            say(PERS[pet.pers])
+            commit()
+        }
+        if (pet.dead && scr != Scr.DEAD) {
+            anim = null
+            scr = Scr.DEAD
+        }
+        if (toast.isNotEmpty() && n > toastUntil) toast = ""
+
+        val a = anim
+        if (a != null && n - a.t0 >= a.dur) finishAnim()
+
+        val calling = pet.calling && !pet.sleeping && !pet.dead && st != Stage.EGG && !away()
+        if (calling && !wasCalling) beep()
+        wasCalling = calling
+
+        when (scr) {
+            Scr.G_CATCH -> updateCatch(n)
+            Scr.G_HILO -> updateHilo(n)
+            Scr.G_SWING -> updateSwing(n)
+            else -> {}
+        }
+
+        if (scr == Scr.HOME && anim == null && !pet.sleeping && !pet.dead && !away() &&
+            st != Stage.EGG && n > nextMove
+        ) {
+            if (rnd.nextInt(100) < 65) {
+                val dir = if (facingLeft) -1f else 1f
+                var nx = petX + dir * 2f
+                if (nx < 22f || nx > 58f) {
+                    facingLeft = !facingLeft
+                    nx = petX - dir * 2f
+                }
+                petX = nx
+            } else if (rnd.nextInt(100) < 30) {
+                facingLeft = !facingLeft
+            }
+            nextMove = n + 500L + rnd.nextInt(800)
+        }
+    }
+
+    fun frame(n: Long) {
+        update(n)
+        render(n)
     }
 }
