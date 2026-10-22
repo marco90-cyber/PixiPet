@@ -8,6 +8,7 @@ import android.media.AudioManager
 import android.media.ToneGenerator
 import android.util.Base64
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
@@ -34,6 +35,11 @@ const val A_TALK = 10
 const val A_ANGEL = 11
 
 val SHELLS = longArrayOf(0xFFB3D1L, 0x9FE3C8L, 0x9CCBFFL, 0xFFE38AL, 0xC7B3FFL, 0xFFB98AL, 0xF2F2F2L)
+
+fun homeLike(s: Scr): Boolean = when (s) {
+    Scr.HOME, Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.DEBUG, Scr.STATS -> true
+    else -> false
+}
 
 class Item(
     val label: String,
@@ -68,8 +74,9 @@ class PixiGame(val ctx: Context) {
     }
 
     var pet: Pet = loadPet()
-    var scr = Scr.HOME
-    var cursor = 0
+    var scr by mutableStateOf(Scr.HOME)
+    var cursor by mutableIntStateOf(0)
+    var uiRev by mutableIntStateOf(0)
     var anim: Anim? = null
     var toast = ""
     var toastUntil = 0L
@@ -153,6 +160,7 @@ class PixiGame(val ctx: Context) {
     private fun commit() {
         pet.clamp()
         save()
+        uiRev++
     }
 
     fun say(t: String) {
@@ -186,7 +194,7 @@ class PixiGame(val ctx: Context) {
         val teen = st.atLeast(Stage.TEEN)
 
         return when (scr) {
-            Scr.MENU -> listOf(
+            Scr.HOME, Scr.MENU -> listOf(
                 Item("FEED", enabled = free, icon = 0) { open(Scr.FOOD) },
                 Item("BATH", enabled = free, icon = 1) { startAnim(A_BATH, 2800L, 0, Scr.HOME) },
                 Item("CLEAN", enabled = free, icon = 2) {
@@ -201,8 +209,7 @@ class PixiGame(val ctx: Context) {
                     if (pet.coins >= 10) pet.coins -= 10
                     startAnim(A_MED, 2600L, 0, Scr.HOME)
                 },
-                Item("SETUP", icon = 9) { open(Scr.SETTINGS) },
-                Item("BACK", icon = 10) { scr = Scr.HOME }
+                Item("SETUP", icon = 9) { open(Scr.SETTINGS) }
             )
 
             Scr.FOOD -> FOODS.mapIndexed { i, f ->
@@ -361,6 +368,27 @@ class PixiGame(val ctx: Context) {
                 Item("LEAVE", icon = 10) { open(Scr.MAP) }
             )
 
+            Scr.G_HILO -> listOf(
+                Item("LOW") { hiloInput(0) },
+                Item("HIGH") { hiloInput(2) }
+            )
+
+            Scr.G_SWING -> listOf(Item("SWING!") { swingHit() })
+
+            Scr.G_CATCH -> listOf(
+                Item("< LEFT") { bx = (bx - 12f).coerceIn(6f, 74f) },
+                Item("RIGHT >") { bx = (bx + 12f).coerceIn(6f, 74f) }
+            )
+
+            Scr.G_END -> listOf(
+                Item("OK") {
+                    scr = endBack
+                    cursor = 0
+                }
+            )
+
+            Scr.DEAD -> listOf(Item("NEW EGG") { newPet() })
+
             else -> emptyList()
         }
     }
@@ -396,7 +424,6 @@ class PixiGame(val ctx: Context) {
         }
         when (scr) {
             Scr.ANIM -> {}
-            Scr.HOME -> open(Scr.MENU)
             Scr.STATS -> if (b == 1) open(Scr.MENU) else statsPage = (statsPage + 1) % 2
             Scr.G_CATCH -> {
                 if (b == 0) bx -= 9f
@@ -430,13 +457,13 @@ class PixiGame(val ctx: Context) {
         }
         when (scr) {
             Scr.ANIM -> {}
-            Scr.HOME -> {
-                beep()
-                open(Scr.MENU)
-            }
-            Scr.STATS -> {
-                beep()
-                open(Scr.MENU)
+            Scr.STATS -> {}
+            Scr.HOME, Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.DEBUG -> {
+                val st = pet.stage(now())
+                if (!pet.sleeping && !away() && st != Stage.EGG) {
+                    beep()
+                    startAnim(A_PET, 2400L, 0, scr)
+                }
             }
             Scr.G_CATCH -> bx = x.toFloat().coerceIn(6f, 74f)
             Scr.G_HILO -> hiloInput(if (x < W / 2) 0 else 2)
@@ -921,7 +948,7 @@ class PixiGame(val ctx: Context) {
             else -> {}
         }
 
-        if (scr == Scr.HOME && anim == null && !pet.sleeping && !pet.dead && !away() &&
+        if (homeLike(scr) && anim == null && !pet.sleeping && !pet.dead && !away() &&
             st != Stage.EGG && n > nextMove
         ) {
             if (rnd.nextInt(100) < 65) {
@@ -937,6 +964,48 @@ class PixiGame(val ctx: Context) {
             }
             nextMove = n + 500L + rnd.nextInt(800)
         }
+    }
+
+    fun title(): String = when (scr) {
+        Scr.HOME, Scr.MENU -> "MENU"
+        Scr.FOOD -> "FEED"
+        Scr.PLAYLIST -> "PLAY"
+        Scr.MAP -> "MAP"
+        Scr.SETTINGS -> "SETUP"
+        Scr.DEBUG -> "DEBUG"
+        Scr.STATS -> "STATS"
+        Scr.PARK -> "PARK"
+        Scr.SCHOOL -> "SCHOOL"
+        Scr.STAND -> "STAND"
+        Scr.UNDER -> "UNDERWORLD"
+        Scr.G_CATCH -> "TRICK TREAT"
+        Scr.G_HILO -> "HI-LO"
+        Scr.G_SWING -> "SWING"
+        Scr.G_END -> "RESULT"
+        Scr.DEAD -> "R.I.P."
+        Scr.ANIM -> "..."
+    }
+
+    fun canGoBack(): Boolean = when (scr) {
+        Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.STATS, Scr.DEBUG,
+        Scr.PARK, Scr.SCHOOL, Scr.STAND, Scr.UNDER -> true
+        else -> false
+    }
+
+    fun back() {
+        when (scr) {
+            Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.STATS -> open(Scr.HOME)
+            Scr.DEBUG -> open(Scr.SETTINGS)
+            Scr.PARK, Scr.SCHOOL, Scr.STAND, Scr.UNDER -> open(Scr.MAP)
+            else -> {}
+        }
+    }
+
+    /** Tocco su una voce del pannello. */
+    fun pick(i: Int) {
+        cursor = i
+        beep()
+        activate()
     }
 
     fun frame(n: Long) {

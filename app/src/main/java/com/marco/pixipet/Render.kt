@@ -15,7 +15,7 @@ fun PixiGame.render(now: Long) {
     hits.clear()
     f.clear(PANEL)
     when (scr) {
-        Scr.HOME -> {
+        Scr.HOME, Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.DEBUG, Scr.STATS -> {
             drawRoom(f, now, isNight())
             drawHomeScene(now)
             drawHud(now)
@@ -24,13 +24,6 @@ fun PixiGame.render(now: Long) {
                 drawIcon(f, 11, petX.toInt() + 8, 14 + ((now / 500L) % 2L).toInt() * 2)
             }
         }
-        Scr.MENU -> drawMenu()
-        Scr.FOOD -> drawListScreen("FEED")
-        Scr.PLAYLIST -> drawListScreen("PLAY")
-        Scr.MAP -> drawListScreen("MAP")
-        Scr.SETTINGS -> drawListScreen("SETUP")
-        Scr.DEBUG -> drawListScreen("DEBUG")
-        Scr.STATS -> drawStats(now)
         Scr.PARK, Scr.SCHOOL, Scr.STAND, Scr.UNDER -> drawLocation(now)
         Scr.ANIM -> drawAnim(now)
         Scr.G_CATCH -> drawCatch(now)
@@ -51,7 +44,7 @@ fun PixiGame.render(now: Long) {
 
 // ------------------------------------------------------------------ comuni
 
-private fun ageText(min: Float): String {
+fun ageText(min: Float): String {
     val m = min.toInt()
     return when {
         m < 60 -> "${m}M"
@@ -61,10 +54,10 @@ private fun ageText(min: Float): String {
 }
 
 private fun groundY(s: Scr): Int = when (s) {
-    Scr.PARK -> 52
-    Scr.SCHOOL -> 52
+    Scr.PARK -> 66
+    Scr.SCHOOL -> 68
     Scr.STAND -> 45
-    Scr.UNDER -> 52
+    Scr.UNDER -> 66
     else -> 66
 }
 
@@ -328,7 +321,6 @@ private fun PixiGame.drawLocation(now: Long) {
     f.textO(label, 3, 2, WHITE)
     f.textR("${pet.coins}", W - 10, 2, WHITE)
     drawCoin(f, W - 5, 4)
-    drawPanelList(54, 3)
 }
 
 // ------------------------------------------------------------ animazioni
@@ -341,7 +333,7 @@ private fun PixiGame.drawAnim(now: Long) {
     val gy = groundY(a.back)
     val x0 = 40
 
-    if (a.back == Scr.HOME) {
+    if (homeLike(a.back)) {
         val spots = listOf(12 to 60, 62 to 62, 24 to 70, 50 to 72)
         val left = if (a.kind == A_CLEAN) Math.ceil((pet.poops * (1f - p)).toDouble()).toInt() else pet.poops
         for (i in 0 until left.coerceIn(0, 4)) drawPoop(f, spots[i].first, spots[i].second)

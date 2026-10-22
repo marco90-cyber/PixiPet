@@ -1,5 +1,7 @@
 package com.marco.pixipet
 
+import android.graphics.Bitmap
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -11,14 +13,26 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -26,23 +40,34 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+private val PanelBg = Color(0xFF241C3D)
+private val CardBg = Color(0xFF4A3D73)
+private val CardSel = Color(0xFF7A66B8)
+private val CardRim = Color(0xFF6B5CA0)
+private val Gold = Color(0xFFFFD84D)
+private val Pink = Color(0xFFFF9EC4)
 
 private fun shellColor(i: Int): Color = Color(0xFF000000L or SHELLS[i % SHELLS.size])
 
@@ -60,6 +85,8 @@ fun PixiPetApp(game: PixiGame) {
             withFrameNanos { game.frame(System.currentTimeMillis()) }
         }
     }
+
+    BackHandler(enabled = game.canGoBack()) { game.back() }
 
     val body = shellColor(game.shellIdx)
     val light = tone(body, 0.5f, Color.White)
@@ -121,26 +148,30 @@ fun PixiPetApp(game: PixiGame) {
     }
 }
 
-/** Telefono in verticale: logo in alto, schermo grande, 3 pulsanti in basso. */
+/** Verticale: schermo di gioco in alto, menu touch scorrevole sotto, pulsanti in fondo. */
 @Composable
 private fun PortraitLayout(
     game: PixiGame, w: Dp, h: Dp, shell: Boolean, light: Color, dark: Color
 ) {
-    val margin = if (shell) 18.dp else 8.dp
-    val btn = (w * 0.18f).coerceIn(52.dp, 88.dp)
-    val header = if (shell) 56.dp else 0.dp
-    val availH = h - btn - header - 48.dp
-    val side = minOf(w - margin * 2, availH).coerceAtLeast(160.dp)
+    val margin = if (shell) 16.dp else 8.dp
+    val btn = (w * 0.12f).coerceIn(40.dp, 56.dp)
+    val header = if (shell) 26.dp else 0.dp
+    val availH = h - btn - header - 220.dp - 36.dp
+    val side = minOf(w - margin * 2, availH).coerceAtLeast(140.dp)
 
     Column(
-        Modifier.fillMaxSize().padding(vertical = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceEvenly
+        Modifier
+            .fillMaxSize()
+            .padding(horizontal = margin, vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         if (shell) Header(dark)
         ScreenView(game, side, shell)
+        Spacer(Modifier.height(8.dp))
+        MenuPanel(game, Modifier.weight(1f).fillMaxWidth())
+        Spacer(Modifier.height(8.dp))
         Row(
-            horizontalArrangement = Arrangement.spacedBy(btn * 0.5f),
+            horizontalArrangement = Arrangement.spacedBy(btn * 0.6f),
             verticalAlignment = Alignment.CenterVertically
         ) {
             ShellButton("◀", btn, light, dark, shell) { game.press(0) }
@@ -150,54 +181,55 @@ private fun PortraitLayout(
     }
 }
 
-/** Tablet o telefono girato: schermo al centro, ◀ a sinistra, ● e ▶ a destra. */
+/** Tablet o telefono girato: schermo a sinistra, menu e pulsanti a destra. */
 @Composable
 private fun LandscapeLayout(
     game: PixiGame, w: Dp, h: Dp, shell: Boolean, light: Color, dark: Color
 ) {
-    val btn = (h * 0.2f).coerceIn(48.dp, 80.dp)
-    val side = minOf(h - 24.dp, w - btn * 2 - 64.dp).coerceAtLeast(140.dp)
+    val btn = (h * 0.13f).coerceIn(40.dp, 56.dp)
+    val side = minOf(h - 16.dp, w * 0.5f).coerceAtLeast(140.dp)
 
     Row(
-        Modifier.fillMaxSize().padding(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
+        Modifier
+            .fillMaxSize()
+            .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        ShellButton("◀", btn, light, dark, shell) { game.press(0) }
         ScreenView(game, side, shell)
-        Column(
-            verticalArrangement = Arrangement.spacedBy(btn * 0.4f),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            ShellButton("●", btn, light, dark, shell) { game.press(1) }
-            ShellButton("▶", btn, light, dark, shell) { game.press(2) }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
+            MenuPanel(game, Modifier.weight(1f).fillMaxWidth())
+            Spacer(Modifier.height(8.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(btn * 0.6f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ShellButton("◀", btn, light, dark, shell) { game.press(0) }
+                ShellButton("●", btn, light, dark, shell) { game.press(1) }
+                ShellButton("▶", btn, light, dark, shell) { game.press(2) }
+            }
         }
     }
 }
 
 @Composable
 private fun Header(dark: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            Modifier
-                .size(22.dp)
-                .border(3.dp, dark, CircleShape)
-        )
-        Text(
-            "PIXIPET",
-            color = dark,
-            fontSize = 13.sp,
-            letterSpacing = 5.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace,
-            modifier = Modifier.padding(top = 4.dp)
-        )
-    }
+    Text(
+        "PIXIPET",
+        color = dark,
+        fontSize = 12.sp,
+        letterSpacing = 5.sp,
+        fontWeight = FontWeight.Bold,
+        fontFamily = FontFamily.Monospace,
+        modifier = Modifier.padding(bottom = 6.dp)
+    )
 }
+
+// ---------------------------------------------------------------- schermo
 
 @Composable
 private fun ScreenView(game: PixiGame, side: Dp, shell: Boolean) {
-    val bezel = if (shell) 10.dp else 0.dp
+    val bezel = if (shell) 8.dp else 0.dp
     Box(
         Modifier
             .size(side)
@@ -207,7 +239,7 @@ private fun ScreenView(game: PixiGame, side: Dp, shell: Boolean) {
         Canvas(
             Modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(if (shell) 8.dp else 6.dp))
+                .clip(RoundedCornerShape(if (shell) 10.dp else 6.dp))
                 .pointerInput(Unit) {
                     detectTapGestures { o ->
                         game.tapScreen(o.x / size.width, o.y / size.height)
@@ -230,6 +262,264 @@ private fun ScreenView(game: PixiGame, side: Dp, shell: Boolean) {
         }
     }
 }
+
+// --------------------------------------------------------------- pannello
+
+@Composable
+private fun MenuPanel(game: PixiGame, modifier: Modifier) {
+    val scr = game.scr
+    val cursor = game.cursor
+    val rev = game.uiRev
+    val homeLike = scr == Scr.HOME || scr == Scr.MENU
+    val items = remember(scr, rev) { game.items() }
+
+    Column(
+        modifier
+            .background(PanelBg, RoundedCornerShape(18.dp))
+            .padding(10.dp)
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (game.canGoBack()) {
+                Text(
+                    "‹ BACK",
+                    color = Pink,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 13.sp,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { game.back() }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+            }
+            Text(
+                game.title(),
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 14.sp
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                "${game.pet.coins} C",
+                color = Gold,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 14.sp
+            )
+        }
+
+        val content = Modifier.weight(1f).fillMaxWidth()
+        when {
+            scr == Scr.STATS -> StatsView(game, rev, content)
+            items.isEmpty() -> Box(content, contentAlignment = Alignment.Center) {
+                Text("...", color = Color(0xFF8A82A8), fontFamily = FontFamily.Monospace, fontSize = 18.sp)
+            }
+            else -> ItemsGrid(game, items, homeLike, cursor, scr, content)
+        }
+    }
+}
+
+@Composable
+private fun ItemsGrid(
+    game: PixiGame, items: List<Item>, homeLike: Boolean, cursor: Int, scr: Scr, modifier: Modifier
+) {
+    key(scr) {
+        val state = rememberLazyGridState()
+        LaunchedEffect(scr, cursor, items.size) {
+            val target = cursor.coerceIn(0, (items.size - 1).coerceAtLeast(0))
+            if (items.isNotEmpty() && state.layoutInfo.visibleItemsInfo.none { it.index == target }) {
+                state.animateScrollToItem(target)
+            }
+        }
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(if (homeLike) 3 else 1),
+            state = state,
+            modifier = modifier,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            itemsIndexed(items) { i, item ->
+                ItemCard(item, i == cursor, homeLike) { game.pick(i) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ItemCard(item: Item, selected: Boolean, tile: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(12.dp)
+    val mod = Modifier
+        .fillMaxWidth()
+        .alpha(if (item.enabled) 1f else 0.4f)
+        .background(if (selected) CardSel else CardBg, shape)
+        .border(if (selected) 2.dp else 1.dp, if (selected) Gold else CardRim, shape)
+        .clip(shape)
+        .clickable { onClick() }
+
+    if (tile) {
+        Column(mod.padding(vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            PixelIcon(item.icon, item.food, 34.dp)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                item.label,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Clip
+            )
+        }
+    } else {
+        Row(
+            mod.heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (item.icon >= 0 || item.food >= 0) {
+                PixelIcon(item.icon, item.food, 28.dp)
+                Spacer(Modifier.width(10.dp))
+            }
+            Text(
+                item.label,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 14.sp,
+                modifier = Modifier.weight(1f)
+            )
+            if (item.sub.isNotEmpty()) {
+                Text(
+                    item.sub,
+                    color = Pink,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp
+                )
+            }
+        }
+    }
+}
+
+/** Le icone sono le stesse disegnate a pixel per lo schermo di gioco. */
+@Composable
+private fun PixelIcon(id: Int, food: Int, dp: Dp) {
+    if (id < 0 && food < 0) return
+    val img = remember(id, food) {
+        val f = Fb(12, 12)
+        if (food >= 0) drawFood(f, food, 1, 1) else drawIcon(f, id, 1, 1)
+        Bitmap.createBitmap(f.px, 12, 12, Bitmap.Config.ARGB_8888).asImageBitmap()
+    }
+    Canvas(Modifier.size(dp)) {
+        drawImage(
+            img,
+            dstSize = IntSize(size.width.toInt(), size.height.toInt()),
+            filterQuality = FilterQuality.None
+        )
+    }
+}
+
+// ----------------------------------------------------------- statistiche
+
+@Composable
+private fun StatsView(game: PixiGame, @Suppress("UNUSED_PARAMETER") rev: Int, modifier: Modifier) {
+    val pet = game.pet
+    val now = System.currentTimeMillis()
+    val trait = if (pet.immortal) "IMMORTAL" else if (pet.angel) "ANGEL" else "-"
+    Column(modifier.verticalScroll(rememberScrollState())) {
+        StatBar("HUNGER", pet.hunger)
+        StatBar("HYGIENE", pet.hygiene)
+        StatBar("HAPPY", pet.happy)
+        StatBar("ENERGY", pet.energy)
+        StatBar("SMARTS", pet.smarts)
+        StatBar("ACTIVE", pet.active)
+        Spacer(Modifier.height(10.dp))
+        InfoRow("NAME", pet.name)
+        InfoRow("STAGE", pet.stage(now).label)
+        InfoRow("AGE", ageText(pet.ageMin(now)))
+        InfoRow("TYPE", if (pet.pers >= 0) PERS[pet.pers] else "?")
+        InfoRow("WEIGHT", "${pet.weight}")
+        InfoRow("COINS", "${pet.coins}")
+        InfoRow("CANDY", "${pet.candy}")
+        InfoRow("DATES", "${pet.dates}")
+        InfoRow("GAMES", "${pet.games}")
+        InfoRow("GENERATION", "${pet.generation}")
+        InfoRow("TRAIT", trait)
+    }
+}
+
+@Composable
+private fun StatBar(label: String, value: Float) {
+    val frac = (value / 100f).coerceIn(0f, 1f)
+    val c = when {
+        value > 50f -> Color(0xFF6FCF6F)
+        value > 25f -> Color(0xFFFFD84D)
+        else -> Color(0xFFE23B3B)
+    }
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            label,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+            modifier = Modifier.width(78.dp)
+        )
+        Box(
+            Modifier
+                .weight(1f)
+                .height(14.dp)
+                .background(Color(0xFF1B1530), RoundedCornerShape(7.dp))
+                .border(1.dp, Color(0xFFB6A8E0), RoundedCornerShape(7.dp))
+                .padding(2.dp)
+        ) {
+            if (frac > 0.02f) {
+                Box(
+                    Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(frac)
+                        .background(c, RoundedCornerShape(5.dp))
+                )
+            }
+        }
+        Text(
+            "${value.toInt()}",
+            color = Color(0xFFB6A8E0),
+            fontFamily = FontFamily.Monospace,
+            fontSize = 11.sp,
+            modifier = Modifier.width(30.dp).padding(start = 6.dp)
+        )
+    }
+}
+
+@Composable
+private fun InfoRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+        Text(
+            label,
+            color = Pink,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            value,
+            color = Color.White,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp
+        )
+    }
+}
+
+// ----------------------------------------------------------------- pulsanti
 
 @Composable
 private fun ShellButton(

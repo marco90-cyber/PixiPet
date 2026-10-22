@@ -7,8 +7,8 @@ Sprite, scene, nome e codice sono originali: niente asset di terzi.
 Push su `main` (o **Actions → Build APK → Run workflow**), poi scarica l'artifact **PixiPet-debug-apk**.
 
 ## Come si gioca
-Tocca lo schermo (o premi un pulsante) per aprire il menu. ◀ ▶ spostano il cursore, ● conferma.
-Si può anche toccare direttamente le voci.
+Schermo di gioco in alto e menu touch scorrevole sotto (su e giu'). Tocca le voci oppure usa ◀ ▶ (cursore) e ● (conferma).
+Toccando l'animaletto sullo schermo gli fai le coccole; il tasto Indietro di Android torna al menu precedente.
 
 - **Cura:** cibo (costa monete), bagno, pulizia cacche, coccole, medicina, sonno.
 - **Mappa:** parco (palla, appuntamenti), scuola (smarts), bancarella (lavoro, guadagni monete),
