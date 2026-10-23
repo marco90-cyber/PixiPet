@@ -31,6 +31,8 @@ fun PixiGame.render(now: Long) {
         Scr.G_CATCH -> drawCatch(now)
         Scr.G_HILO -> drawHilo(now)
         Scr.G_SWING -> drawSwing(now)
+        Scr.NAME -> drawNameScr(now)
+        Scr.EGG -> drawEggScr(now)
         Scr.G_BOUNCE -> drawBounce(now)
         Scr.G_MEM -> drawMem(now)
         Scr.G_END -> drawEnd(now)
@@ -489,6 +491,41 @@ private fun PixiGame.drawCatch(now: Long) {
     for (i in 0 until cLives) drawHeart(f, W - 8 - i * 7, 2)
     val left = ((cEnd - now) / 1000L).coerceAtLeast(0L)
     f.textO("${left}S", 3, 10, WHITE)
+}
+
+private val EGG_LINES = arrayOf(
+    arrayOf("ADORA LE COCCOLE", "PIU' FELICITA'"),
+    arrayOf("IMPARA IN FRETTA", "STUDIA MEGLIO"),
+    arrayOf("ADORA MUOVERSI", "PIU' FORMA GIOCANDO"),
+    arrayOf("SEMPRE AFFAMATO", "CIBO PIU' SAZIANTE"),
+    arrayOf("BRONTOLONE MA TOSTO", "GUADAGNA DI PIU'")
+)
+
+private fun PixiGame.drawNameScr(now: Long) {
+    val f = fb
+    f.grad(0, H, col(0x4B3A8A), col(0x241C3D))
+    f.textC("COME SI CHIAMA", 8, WHITE)
+    f.textC("IL TUO PET?", 15, PINK)
+    f.rect(4, 28, 72, 20, PANEL)
+    f.frame(4, 28, 72, 20, PINK)
+    val cur = if (nameBuf.length < 8 && (now / 450L) % 2L == 0L) "_" else ""
+    f.textC(nameBuf + cur, 34, WHITE, 2)
+    f.textC("NON POTRA' PIU'", 56, GRAY)
+    f.textC("ESSERE CAMBIATO", 63, GRAY)
+}
+
+private fun PixiGame.drawEggScr(now: Long) {
+    val f = fb
+    f.grad(0, H, col(0x4B3A8A), col(0x241C3D))
+    f.textC("SCEGLI IL TUO UOVO", 3, WHITE)
+    val sel = eggView().coerceIn(0, 4)
+    val wob = ((now / 350L) % 3L).toInt() - 1
+    val egg = makePet(Stage.EGG, sel, sel, M_NORMAL, false, false, 0, false)
+    f.blit(egg, 18 + wob, 6)
+    for (i in 0 until 5) f.rect(28 + i * 5, 52, 3, 3, if (i == sel) WHITE else PANEL2)
+    f.textC(PERS[sel], 58, BODY[sel])
+    f.textC(EGG_LINES[sel][0], 66, WHITE)
+    f.textC(EGG_LINES[sel][1], 73, GRAY)
 }
 
 private fun PixiGame.drawBounce(now: Long) {

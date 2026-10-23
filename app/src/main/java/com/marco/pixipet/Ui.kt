@@ -124,54 +124,6 @@ fun PixiPetApp(game: PixiGame) {
         }
     }
 
-    if (game.askEgg) {
-        var sel by remember { mutableStateOf(-1) }
-        AlertDialog(
-            onDismissRequest = {},
-            confirmButton = {
-                TextButton(enabled = sel >= 0, onClick = { game.pickEgg(sel) }) { Text("SCEGLI") }
-            },
-            title = { Text("Scegli il tuo uovo") },
-            text = {
-                Column {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        for (i in 0 until 5) EggChoice(i, i == sel) { sel = i }
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        if (sel >= 0) "${PERS[sel]}: ${EGG_DESC[sel]}" else "Tocca un uovo per scoprire il suo carattere.",
-                        fontSize = 14.sp
-                    )
-                }
-            }
-        )
-    }
-
-    if (game.askName) {
-        var nm by remember { mutableStateOf(NAMES.random()) }
-        AlertDialog(
-            onDismissRequest = {},
-            confirmButton = {
-                TextButton(
-                    enabled = nm.any { it.isLetterOrDigit() },
-                    onClick = { game.setFirstName(nm) }
-                ) { Text("OK") }
-            },
-            title = { Text("Come si chiama il tuo pet?") },
-            text = {
-                Column {
-                    OutlinedTextField(
-                        value = nm,
-                        onValueChange = { nm = it.take(8).uppercase() },
-                        singleLine = true
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text("Il nome non potrà più essere cambiato.")
-                }
-            }
-        )
-    }
-
     if (game.showRename) {
         var txt by remember { mutableStateOf(game.pet.name) }
         AlertDialog(
@@ -365,6 +317,7 @@ private fun MenuPanel(game: PixiGame, modifier: Modifier) {
         val content = Modifier.weight(1f).fillMaxWidth()
         when {
             scr == Scr.STATS -> StatsView(game, rev, content)
+            scr == Scr.NAME -> NameKeyboard(game, content)
             items.isEmpty() -> Box(content, contentAlignment = Alignment.Center) {
                 Text("...", color = Color(0xFF8A82A8), fontFamily = FontFamily.Monospace, fontSize = 18.sp)
             }
@@ -624,6 +577,44 @@ private fun ShellButton(
             fontSize = (size.value * 0.36f).sp,
             fontWeight = FontWeight.Bold,
             fontFamily = FontFamily.Monospace
+        )
+    }
+}
+
+@Composable
+private fun NameKeyboard(game: PixiGame, modifier: Modifier) {
+    val rows = listOf("ABCDEFGHI", "JKLMNOPQR", "STUVWXYZ0", "123456789")
+    Column(modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        for (r in rows) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                for (c in r) KeyCap(c.toString(), Modifier.weight(1f)) { game.nameKey(c) }
+            }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            KeyCap("CANCELLA", Modifier.weight(1f)) { game.nameDel() }
+            KeyCap("OK", Modifier.weight(1f), true) { game.nameOk() }
+        }
+    }
+}
+
+@Composable
+private fun KeyCap(label: String, modifier: Modifier, accent: Boolean = false, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(8.dp)
+    Box(
+        modifier
+            .heightIn(min = 40.dp)
+            .background(if (accent) CardSel else CardBg, shape)
+            .border(1.dp, if (accent) Gold else CardRim, shape)
+            .clip(shape)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            label,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 13.sp
         )
     }
 }

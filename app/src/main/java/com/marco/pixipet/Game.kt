@@ -19,7 +19,7 @@ import kotlin.random.Random
 
 enum class Scr {
     HOME, MENU, FOOD, PLAYLIST, MAP, STATS, BG, SETTINGS, PARK, SCHOOL, STAND, UNDER,
-    ANIM, G_CATCH, G_HILO, G_SWING, G_BOUNCE, G_MEM, G_END, DEAD, DEBUG, INFO
+    ANIM, G_CATCH, G_HILO, G_SWING, G_BOUNCE, G_MEM, G_END, DEAD, DEBUG, INFO, NAME, EGG
 }
 
 const val A_FEED = 1
@@ -63,8 +63,9 @@ class PixiGame(val ctx: Context) {
 
     var image by mutableStateOf<ImageBitmap?>(null)
     var showRename by mutableStateOf(false)
-    var askName by mutableStateOf(false)
-    var askEgg by mutableStateOf(false)
+    var nameBuf by mutableStateOf("")
+    var eggSel = 0
+    var bgOwned = prefs.getInt("bgOwned", 1)
     var bgSel = -1
     var shellIdx by mutableStateOf(prefs.getInt("shell", 0))
     var showShell by mutableStateOf(prefs.getBoolean("showShell", true))
@@ -144,8 +145,7 @@ class PixiGame(val ctx: Context) {
     var wLast = 0L
 
     init {
-        askName = !pet.named
-        askEgg = pet.named && !pet.eggPicked
+        if (!pet.named) scr = Scr.NAME else if (!pet.eggPicked) scr = Scr.EGG
         save()
     }
 
@@ -314,6 +314,12 @@ class PixiGame(val ctx: Context) {
 
             Scr.BG -> bgItems()
 
+            Scr.NAME -> emptyList()
+
+            Scr.EGG -> PERS.indices.map { i ->
+                Item("UOVO ${EGG_COLORS[i]}", PERS[i]) { eggSel = i }
+            } + Item("SCEGLI QUESTO UOVO") { pickEgg(eggView()) }
+
             Scr.SETTINGS -> listOf(
                 Item(if (sound) "SUONO: SÌ" else "SUONO: NO") {
                     sound = !sound
@@ -336,7 +342,7 @@ class PixiGame(val ctx: Context) {
                     if (confirmReset) newPet() else confirmReset = true
                 },
                 Item("INFORMAZIONI") { open(Scr.INFO) },
-                Item("DEBUG") { open(Scr.DEBUG) },
+                *(if (pet.name == "TEST1990") arrayOf(Item("DEBUG") { open(Scr.DEBUG) }) else arrayOf<Item>()),
                 Item("INDIETRO", icon = 10) { open(Scr.MENU) }
             )
 
@@ -521,6 +527,7 @@ class PixiGame(val ctx: Context) {
                 if (b == 2) bx += 9f
                 bx = bx.coerceIn(6f, 74f)
             }
+            Scr.NAME -> if (b == 1) nameOk()
             Scr.G_HILO -> hiloInput(b)
             Scr.G_BOUNCE -> {
                 if (b == 0) bx -= 9f
@@ -593,8 +600,8 @@ class PixiGame(val ctx: Context) {
         if (clean.isEmpty()) return
         pet.name = clean
         pet.named = true
-        askName = false
-        askEgg = true
+        scr = Scr.EGG
+        cursor = 0
         commit()
     }
 
@@ -606,20 +613,51 @@ class PixiGame(val ctx: Context) {
         pet.eggPicked = true
         pet.bornAt = now()
         pet.lastTick = pet.bornAt
-        askEgg = false
+        scr = Scr.HOME
+        cursor = 0
         commit()
     }
 
+    fun nameKey(c: Char) {
+        if (nameBuf.length < 8) nameBuf += c
+        beep()
+    }
+
+    fun nameDel() {
+        nameBuf = nameBuf.dropLast(1)
+        beep()
+    }
+
+    fun nameOk() {
+        if (nameBuf.isEmpty()) say("SCRIVI UN NOME") else setFirstName(nameBuf)
+    }
+
+    fun eggView(): Int = if (cursor in 0..4) cursor else eggSel
+
+    private fun owned(i: Int) = i == pet.bg || (bgOwned shr i) and 1 == 1
+
     private fun bgItems(): List<Item> = ROOM_NAMES.indices.map { i ->
-        Item(ROOM_NAMES[i], if (i == pet.bg) "ATTIVO" else "50C", i == pet.bg || pet.coins >= 50, icon = 17) {
+        Item(
+            ROOM_NAMES[i],
+            if (i == pet.bg) "ATTIVO" else if (owned(i)) "TUO" else "50C",
+            owned(i) || pet.coins >= 50,
+            icon = 17
+        ) {
             when {
                 i == pet.bg -> say("GIA' ATTIVO")
+                owned(i) -> {
+                    pet.bg = i
+                    say("SFONDO CAMBIATO")
+                    commit()
+                }
                 bgSel != i -> {
                     bgSel = i
                     say("TOCCA ANCORA")
                 }
                 else -> {
                     pet.coins -= 50
+                    bgOwned = bgOwned or (1 shl i)
+                    prefs.edit().putInt("bgOwned", bgOwned).apply()
                     pet.bg = i
                     bgSel = -1
                     say("SFONDO CAMBIATO")
@@ -664,12 +702,12 @@ class PixiGame(val ctx: Context) {
     fun newPet() {
         val g = if (pet.dead) pet.generation + 1 else 1
         pet = newPetObj(now(), g)
-        scr = Scr.HOME
+        scr = Scr.NAME
+        nameBuf = ""
         cursor = 0
         anim = null
         lastStage = Stage.EGG
         petX = 40f
-        askName = true
         commit()
     }
 
@@ -1263,6 +1301,7 @@ class PixiGame(val ctx: Context) {
         if (calling && !wasCalling) beep()
         wasCalling = calling
 
+        if (scr == Scr.EGG && cursor in 0..4) eggSel = cursor
         when (scr) {
             Scr.G_CATCH -> updateCatch(n)
             Scr.G_HILO -> updateHilo(n)
@@ -1311,6 +1350,8 @@ class PixiGame(val ctx: Context) {
         Scr.G_SWING -> "BATTUTA"
         Scr.G_END -> "RISULTATO"
         Scr.DEAD -> "R.I.P."
+        Scr.NAME -> "NOME"
+        Scr.EGG -> "SCEGLI L'UOVO"
         Scr.ANIM -> "..."
     }
 
@@ -1357,5 +1398,14 @@ val INFO_LINES = listOf(
     "NOTIFICHE: ti avvisano se ha fame, è sporco, malato, dorme o torna a casa.",
     "NOME: si sceglie all'inizio e non si può più cambiare.",
     "CONTROLLI: tocca lo schermo per le coccole, usa i tasti o il menu per il resto. Il tasto centrale conferma.",
+    "APP: PIXIPET versione 1.0, un gioco di animaletto virtuale per Android.",
+    "AUTORE: ideato da Marco e realizzato insieme a Claude (Anthropic).",
+    "GRAFICA: tutti i personaggi, le stanze e le icone sono disegnati a pixel dentro il gioco.",
+    "DATI: il salvataggio resta solo sul tuo telefono. Non servono account né internet.",
+    "TRASFERIMENTO: ESPORTA DATI copia il salvataggio, IMPORTA DATI lo ripristina su un altro telefono.",
+    "PERMESSI: serve solo quello per le notifiche, che puoi spegnere dalle opzioni.",
+    "ISPIRAZIONE: i classici animaletti virtuali da tenere in tasca.",
     "VERSIONE 1.0 - creato con Claude"
 )
+
+val EGG_COLORS = arrayOf("ROSA", "BLU", "ARANCIO", "VERDE", "VIOLA")

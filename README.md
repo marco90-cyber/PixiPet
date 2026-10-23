@@ -45,3 +45,4 @@ uccide/resuscita e invia una notifica di prova.
 - Dopo il nome si sceglie tra 5 uova di colore e forma diversi: ognuno ha un carattere (dolce, furbo, sportivo, goloso, burbero) con un piccolo bonus.
 - Nuovi giochi: Rimbalzo (pallina e barra) e Memoria (ripeti la sequenza di colori); Alto-Basso rimosso.
 - Nuovi cibi: pasta e pollo. Voce INFORMAZIONI nelle opzioni. Scuola: SCUOLA 2 ORE riempie la barra mente (richiamando prima non si ottiene nulla).
+- Nome e scelta dell'uovo ora sono schermate del gioco (tastiera a tasti nel pannello). Gli sfondi comprati restano tuoi per sempre. Il menu DEBUG compare solo se il pet si chiama TEST1990.
