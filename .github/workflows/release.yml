@@ -1,14 +1,39 @@
 name: Release
 
+# Si pubblica una release ogni volta che cambia APP_VERSION in Version.kt (push su main).
 on:
   push:
-    tags: [ 'v*' ]
+    branches: [ main ]
+    paths:
+      - 'shared/src/main/kotlin/com/marco/pixipet/Version.kt'
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      exists: ${{ steps.v.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER=$(grep -oP 'APP_VERSION = "\K[0-9.]+' shared/src/main/kotlin/com/marco/pixipet/Version.kt)
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          if gh release view "v$VER" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
   android:
+    needs: prepare
+    if: needs.prepare.outputs.exists == 'false'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,13 +47,15 @@ jobs:
       - name: Build release APK
         run: gradle :app:assembleRelease --no-daemon
       - name: Rename
-        run: cp app/build/outputs/apk/release/app-release.apk PixiPet-${{ github.ref_name }}-android.apk
+        run: cp app/build/outputs/apk/release/app-release.apk PixiPet-v${{ needs.prepare.outputs.version }}-android.apk
       - uses: actions/upload-artifact@v4
         with:
           name: android
-          path: PixiPet-${{ github.ref_name }}-android.apk
+          path: PixiPet-v${{ needs.prepare.outputs.version }}-android.apk
 
   windows:
+    needs: prepare
+    if: needs.prepare.outputs.exists == 'false'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,14 +70,14 @@ jobs:
         run: gradle :desktop:createDistributable --no-daemon
       - name: Zip
         shell: pwsh
-        run: Compress-Archive -Path desktop/build/compose/binaries/main/app/PixiPet -DestinationPath PixiPet-${{ github.ref_name }}-windows-portable.zip
+        run: Compress-Archive -Path desktop/build/compose/binaries/main/app/PixiPet -DestinationPath PixiPet-v${{ needs.prepare.outputs.version }}-windows-portable.zip
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: PixiPet-${{ github.ref_name }}-windows-portable.zip
+          path: PixiPet-v${{ needs.prepare.outputs.version }}-windows-portable.zip
 
   release:
-    needs: [ android, windows ]
+    needs: [ prepare, android, windows ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -60,4 +87,7 @@ jobs:
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ github.ref_name }}" dist/* --repo "${{ github.repository }}" --title "PixiPet ${{ github.ref_name }}" --generate-notes
+        run: |
+          gh release create "v${{ needs.prepare.outputs.version }}" dist/* \
+            --repo "${{ github.repository }}" --target "${{ github.sha }}" \
+            --title "PixiPet v${{ needs.prepare.outputs.version }}" --generate-notes
