@@ -175,6 +175,15 @@ class Pet(var bornAt: Long) {
         diedAt = at
     }
 
+    /** Avanza la simulazione fino all'ultimo minuto completo trascorso. */
+    fun advanceTo(now: Long, rnd: Random) {
+        var steps = 0
+        while (now - lastTick >= 60000L && steps < 300000) {
+            step(rnd)
+            steps++
+        }
+    }
+
     /** Simula esattamente un minuto di vita. */
     fun step(rnd: Random) {
         val at = lastTick + 60000L

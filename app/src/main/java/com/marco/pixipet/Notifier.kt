@@ -225,11 +225,9 @@ object Notifier {
     // ------------------------------------------------------- simulazione
 
     fun advance(p: Pet, now: Long) {
-        var g = 0
-        while (now - p.lastTick >= 60000L && g < 300000) {
-            p.step(Random.Default)
-            g++
-        }
+
+        p.advanceTo(now, Random.Default)
+
         if (p.awayKind != 0 && now >= p.awayUntil) p.finishAway()
         if (p.pers < 0 && p.stage(now).atLeast(Stage.TEEN)) p.assignPers()
         p.clamp()

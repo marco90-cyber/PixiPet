@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.SharedPreferences
+import android.graphics.Bitmap
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.util.Base64
@@ -59,6 +60,7 @@ class PixiGame(val ctx: Context) {
     val prefs: SharedPreferences = ctx.getSharedPreferences("pixipet2", Context.MODE_PRIVATE)
     val rnd = Random(System.nanoTime())
     val fb = Fb(W, H)
+    internal val frameBitmap = Bitmap.createBitmap(W, H, Bitmap.Config.ARGB_8888)
     val hits = ArrayList<Hit>()
 
     var image by mutableStateOf<ImageBitmap?>(null)
@@ -1050,14 +1052,9 @@ class PixiGame(val ctx: Context) {
     }
 
     fun update(n: Long) {
-        var changed = false
-        var guard = 0
-        while (n - pet.lastTick >= 60000L && guard < 300000) {
-            pet.step(rnd)
-            guard++
-            changed = true
-        }
-        if (changed) commit()
+        val previousTick = pet.lastTick
+        pet.advanceTo(n, rnd)
+        if (pet.lastTick != previousTick) commit()
 
         if (pet.awayKind != 0 && n >= pet.awayUntil) finishAway()
 
