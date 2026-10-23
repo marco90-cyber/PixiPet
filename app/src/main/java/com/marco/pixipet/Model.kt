@@ -36,7 +36,9 @@ val FOODS = listOf(
     Food("HAMBURGER", 12, 40f, 6f, 2, 1),
     Food("INSALATA", 8, 20f, 0f, 0, 2),
     Food("CARAMELLA", 3, 4f, 15f, 1, 3),
-    Food("TORTA", 15, 12f, 25f, 2, 4)
+    Food("TORTA", 15, 12f, 25f, 2, 4),
+    Food("PASTA", 10, 35f, 4f, 2, 5),
+    Food("POLLO", 14, 45f, 8f, 2, 6)
 )
 
 class Pet(var bornAt: Long) {
@@ -147,6 +149,13 @@ class Pet(var bornAt: Long) {
                 energy -= 15f
                 hygiene -= 8f
                 hunger -= 8f
+                happy -= 5f
+            }
+            5 -> { // scuola da 2 ore: mente al massimo
+                smarts = 100f
+                energy -= 20f
+                hunger -= 15f
+                hygiene -= 10f
                 happy -= 5f
             }
             4 -> { // lavoro da 30 minuti

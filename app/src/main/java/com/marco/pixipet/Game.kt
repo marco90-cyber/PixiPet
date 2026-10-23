@@ -19,7 +19,7 @@ import kotlin.random.Random
 
 enum class Scr {
     HOME, MENU, FOOD, PLAYLIST, MAP, STATS, BG, SETTINGS, PARK, SCHOOL, STAND, UNDER,
-    ANIM, G_CATCH, G_HILO, G_SWING, G_END, DEAD, DEBUG
+    ANIM, G_CATCH, G_HILO, G_SWING, G_BOUNCE, G_MEM, G_END, DEAD, DEBUG, INFO
 }
 
 const val A_FEED = 1
@@ -38,7 +38,7 @@ const val A_REFUSE = 12
 val SHELLS = longArrayOf(0xFFB3D1L, 0x9FE3C8L, 0x9CCBFFL, 0xFFE38AL, 0xC7B3FFL, 0xFFB98AL, 0xF2F2F2L)
 
 fun homeLike(s: Scr): Boolean = when (s) {
-    Scr.HOME, Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.DEBUG, Scr.STATS, Scr.BG -> true
+    Scr.HOME, Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.DEBUG, Scr.STATS, Scr.BG, Scr.INFO -> true
     else -> false
 }
 
@@ -106,6 +106,25 @@ class PixiGame(val ctx: Context) {
     var cEnd = 0L
     var cSpawn = 0L
     var cLast = 0L
+
+    // minigioco: rimbalzo
+    var rx = 40f
+    var ry = 24f
+    var rvx = 20f
+    var rvy = 34f
+    var rHits = 0
+    var rLives = 3
+    var rEnd = 0L
+    var rLast = 0L
+    var rServe = 0L
+
+    // minigioco: memoria
+    val memSeq = ArrayList<Int>()
+    var memPhase = 0
+    var memT0 = 0L
+    var memIn = 0
+    var memLit = -1
+    var memLitT = 0L
 
     // minigioco: alto/basso
     var sRound = 1
@@ -242,8 +261,11 @@ class PixiGame(val ctx: Context) {
                 Item("DOLCETTI", "E-10", pet.energy >= 15f, icon = 15) {
                     if (pet.happy >= 97f) refuse("E' GIA' FELICE") else startCatch(now())
                 },
-                Item("ALTO-BASSO", "E-8", pet.energy >= 15f, icon = 16) {
-                    if (pet.smarts >= 97f) refuse("SA GIA' TUTTO") else startHilo(now())
+                Item("RIMBALZO", "E-8", pet.energy >= 15f, icon = 18) {
+                    if (pet.active >= 97f) refuse("E' GIA' IN FORMA") else startBounce(now())
+                },
+                Item("MEMORIA", "E-8", pet.energy >= 15f, icon = 16) {
+                    if (pet.smarts >= 97f) refuse("SA GIA' TUTTO") else startMem(now())
                 },
                 Item("BATTUTA", "E-12", pet.energy >= 15f, icon = 4) {
                     if (pet.active >= 97f) refuse("E' GIA' IN FORMA") else startSwing(now())
@@ -313,6 +335,7 @@ class PixiGame(val ctx: Context) {
                 Item(if (confirmReset) "SICURO? TOCCA ANCORA" else "NUOVO UOVO") {
                     if (confirmReset) newPet() else confirmReset = true
                 },
+                Item("INFORMAZIONI") { open(Scr.INFO) },
                 Item("DEBUG") { open(Scr.DEBUG) },
                 Item("INDIETRO", icon = 10) { open(Scr.MENU) }
             )
@@ -394,6 +417,9 @@ class PixiGame(val ctx: Context) {
             )
 
             Scr.SCHOOL -> listOf(
+                Item("SCUOLA 2 ORE", "MENTE 100", pet.energy >= 30f) {
+                    if (pet.smarts >= 97f) refuse("SA GIA' TUTTO") else startSchool()
+                },
                 Item("STUDIA", "E-8", pet.energy >= 15f) {
                     if (pet.smarts >= 97f) refuse("SA GIA' TUTTO") else startAnim(A_STUDY, 5000L, 0, Scr.SCHOOL)
                 },
@@ -423,6 +449,20 @@ class PixiGame(val ctx: Context) {
                 Item("BASSO") { hiloInput(0) },
                 Item("ALTO") { hiloInput(2) }
             )
+
+            Scr.G_BOUNCE -> listOf(
+                Item("< SINISTRA") { bx = (bx - 12f).coerceIn(10f, 70f) },
+                Item("DESTRA >") { bx = (bx + 12f).coerceIn(10f, 70f) }
+            )
+
+            Scr.G_MEM -> listOf(
+                Item("ROSSO") { memInput(0) },
+                Item("VERDE") { memInput(1) },
+                Item("BLU") { memInput(2) },
+                Item("GIALLO") { memInput(3) }
+            )
+
+            Scr.INFO -> INFO_LINES.map { Item(it) {} } + Item("INDIETRO", icon = 10) { open(Scr.SETTINGS) }
 
             Scr.G_SWING -> listOf(Item("COLPISCI!") { swingHit() })
 
@@ -482,6 +522,11 @@ class PixiGame(val ctx: Context) {
                 bx = bx.coerceIn(6f, 74f)
             }
             Scr.G_HILO -> hiloInput(b)
+            Scr.G_BOUNCE -> {
+                if (b == 0) bx -= 9f
+                if (b == 2) bx += 9f
+                bx = bx.coerceIn(10f, 70f)
+            }
             Scr.G_SWING -> if (b == 1) swingHit()
             Scr.G_END -> if (b == 1) {
                 scr = endBack
@@ -509,7 +554,7 @@ class PixiGame(val ctx: Context) {
         when (scr) {
             Scr.ANIM -> {}
             Scr.STATS -> {}
-            Scr.HOME, Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.DEBUG, Scr.BG -> {
+            Scr.HOME, Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.DEBUG, Scr.BG, Scr.INFO -> {
                 val st = pet.stage(now())
                 if (!pet.sleeping && !away() && st != Stage.EGG) {
                     beep()
@@ -518,6 +563,8 @@ class PixiGame(val ctx: Context) {
             }
             Scr.G_CATCH -> bx = x.toFloat().coerceIn(6f, 74f)
             Scr.G_HILO -> hiloInput(if (x < W / 2) 0 else 2)
+            Scr.G_BOUNCE -> bx = x.toFloat().coerceIn(10f, 70f)
+            Scr.G_MEM -> memInput((if (x >= W / 2) 1 else 0) + (if (y >= H / 2) 2 else 0))
             Scr.G_SWING -> swingHit()
             Scr.G_END -> press(1)
             else -> {
@@ -535,6 +582,7 @@ class PixiGame(val ctx: Context) {
 
     fun dragScreen(fx: Float) {
         if (scr == Scr.G_CATCH) bx = (fx * W).coerceIn(6f, 74f)
+        if (scr == Scr.G_BOUNCE) bx = (fx * W).coerceIn(10f, 70f)
     }
 
     // ------------------------------------------------------------ rinomina/salva
@@ -724,6 +772,7 @@ class PixiGame(val ctx: Context) {
         when (pet.finishAway(rnd)) {
             1 -> say("E' TORNATO")
             2 -> say("BENTORNATO")
+            5 -> say("MENTE AL MASSIMO")
             3, 4 -> say("+${pet.coins - before} MONETE")
         }
         commit()
@@ -738,6 +787,15 @@ class PixiGame(val ctx: Context) {
         } else {
             finishAway()
         }
+    }
+
+    private fun startSchool() {
+        pet.awayKind = 5
+        pet.awayUntil = now() + 2 * 3600000L
+        scr = Scr.HOME
+        cursor = 0
+        commit()
+        say("A SCUOLA")
     }
 
     private fun startWork(min: Int) {
@@ -978,6 +1036,130 @@ class PixiGame(val ctx: Context) {
         }
     }
 
+    // ------------------------------------------------------------ rimbalzo
+
+    private fun serve(n: Long) {
+        rx = 40f
+        ry = 22f
+        rvx = (if (rnd.nextBoolean()) 1 else -1) * (14f + rnd.nextInt(14))
+        rvy = 34f
+        rServe = n + 700L
+    }
+
+    private fun startBounce(n: Long) {
+        scr = Scr.G_BOUNCE
+        bx = 40f
+        rHits = 0
+        rLives = 3
+        rEnd = n + 45000L
+        rLast = n
+        serve(n)
+    }
+
+    private fun updateBounce(n: Long) {
+        val dt = (n - rLast).coerceIn(0L, 80L) / 1000f
+        rLast = n
+        if (n >= rServe) {
+            val k = 1f + rHits * 0.025f
+            rx += rvx * k * dt
+            ry += rvy * k * dt
+            if (rx < 3f) {
+                rx = 3f
+                rvx = abs(rvx)
+            }
+            if (rx > 77f) {
+                rx = 77f
+                rvx = -abs(rvx)
+            }
+            if (ry < 13f) {
+                ry = 13f
+                rvy = abs(rvy)
+            }
+            if (rvy > 0f && ry >= 66f && ry <= 72f && abs(rx - bx) <= 11f) {
+                rvy = -abs(rvy)
+                rvx = (rvx + (rx - bx) * 2f).coerceIn(-42f, 42f)
+                ry = 65f
+                rHits++
+                beep()
+            } else if (ry > 82f) {
+                rLives--
+                serve(n)
+            }
+        }
+        if (n >= rEnd || rLives <= 0) {
+            val gain = minOf(rHits, 30)
+            pet.coins += gain
+            pet.active += minOf(15f, rHits * 0.8f)
+            pet.happy += minOf(10f, rHits * 0.5f)
+            pet.energy -= 8f
+            pet.hunger -= 4f
+            pet.games++
+            endLines = listOf("RIMBALZI $rHits", "MONETE +$gain")
+            finishGame()
+        }
+    }
+
+    // --------------------------------------------------------------- memoria
+
+    private fun startMem(n: Long) {
+        scr = Scr.G_MEM
+        memSeq.clear()
+        memSeq.add(rnd.nextInt(4))
+        memPhase = 0
+        memT0 = n
+        memIn = 0
+        memLit = -1
+    }
+
+    fun memInput(q: Int) {
+        if (memPhase != 1) return
+        memLit = q
+        memLitT = now()
+        beep()
+        if (memSeq[memIn] == q) {
+            memIn++
+            if (memIn >= memSeq.size) {
+                if (memSeq.size >= 7) {
+                    memPhase = 3
+                } else {
+                    memSeq.add(rnd.nextInt(4))
+                    memPhase = 4
+                }
+                memT0 = now()
+            }
+        } else {
+            memPhase = 2
+            memT0 = now()
+        }
+    }
+
+    private fun updateMem(n: Long) {
+        when (memPhase) {
+            0 -> {
+                val i = ((n - memT0 - 600L) / 700L).toInt()
+                if (i >= memSeq.size) {
+                    memPhase = 1
+                    memIn = 0
+                    memT0 = n
+                }
+            }
+            4 -> if (n - memT0 > 900L) {
+                memPhase = 0
+                memT0 = n
+            }
+            2, 3 -> if (n - memT0 > 1500L) {
+                val done = if (memPhase == 3) memSeq.size else memSeq.size - 1
+                pet.coins += done * 4
+                pet.smarts += 4f * done
+                pet.happy += 2f * done
+                pet.energy -= 8f
+                pet.games++
+                endLines = listOf("LIVELLI $done", "MONETE +${done * 4}")
+                finishGame()
+            }
+        }
+    }
+
     // ------------------------------------------------------------- minigioco 3
 
     private fun startSwing(n: Long) {
@@ -1084,6 +1266,8 @@ class PixiGame(val ctx: Context) {
         when (scr) {
             Scr.G_CATCH -> updateCatch(n)
             Scr.G_HILO -> updateHilo(n)
+            Scr.G_BOUNCE -> updateBounce(n)
+            Scr.G_MEM -> updateMem(n)
             Scr.G_SWING -> updateSwing(n)
             else -> {}
         }
@@ -1121,6 +1305,9 @@ class PixiGame(val ctx: Context) {
         Scr.UNDER -> "ALDILÀ"
         Scr.G_CATCH -> "DOLCETTI"
         Scr.G_HILO -> "ALTO-BASSO"
+        Scr.G_BOUNCE -> "RIMBALZO"
+        Scr.G_MEM -> "MEMORIA"
+        Scr.INFO -> "INFORMAZIONI"
         Scr.G_SWING -> "BATTUTA"
         Scr.G_END -> "RISULTATO"
         Scr.DEAD -> "R.I.P."
@@ -1128,7 +1315,7 @@ class PixiGame(val ctx: Context) {
     }
 
     fun canGoBack(): Boolean = when (scr) {
-        Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.STATS, Scr.DEBUG, Scr.BG,
+        Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.STATS, Scr.DEBUG, Scr.BG, Scr.INFO,
         Scr.PARK, Scr.SCHOOL, Scr.STAND, Scr.UNDER -> true
         else -> false
     }
@@ -1136,7 +1323,7 @@ class PixiGame(val ctx: Context) {
     fun back() {
         when (scr) {
             Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.STATS, Scr.BG -> open(Scr.HOME)
-            Scr.DEBUG -> open(Scr.SETTINGS)
+            Scr.DEBUG, Scr.INFO -> open(Scr.SETTINGS)
             Scr.PARK, Scr.SCHOOL, Scr.STAND, Scr.UNDER -> open(Scr.MAP)
             else -> {}
         }
@@ -1154,3 +1341,21 @@ class PixiGame(val ctx: Context) {
         render(n)
     }
 }
+
+val INFO_LINES = listOf(
+    "PIXIPET: il tuo animaletto virtuale. Vive in tempo reale, anche con l'app chiusa.",
+    "VITA: uovo, neonato, bambino, adolescente, adulto, anziano. Dura circa 4 giorni.",
+    "CURE: tieni alte fame, pulizia, felicità ed energia. Pulisci la cacca e cura le malattie.",
+    "MANGIA: onigiri, hamburger, insalata, caramella, torta, pasta e pollo. Costano monete.",
+    "MONETE: da piccolo 1 moneta per ogni attività breve; da adolescente lavori alla bancarella (5 secondi, 10 o 30 minuti).",
+    "GIOCHI: Dolcetti (vinci caramelle), Rimbalzo (non far cadere la pallina), Memoria (ripeti la sequenza), Battuta.",
+    "CARAMELLE: 10 aprono l'Aldilà, 30 fanno diventare angelo e immortale.",
+    "MAPPA: Parco, Scuola, Bancarella e Aldilà. Dai genitori o in vacanza l'animaletto sta via per un po'.",
+    "CARATTERE: dolce, furbo, sportivo, goloso o burbero. Dipende dall'uovo scelto e dà un piccolo bonus.",
+    "RIFIUTO: se una statistica è al 97% o più, l'animaletto non ripete quell'azione.",
+    "SFONDO: 5 stanze da 50 monete. Di notte, o quando dorme, la finestra mostra luna e stelle.",
+    "NOTIFICHE: ti avvisano se ha fame, è sporco, malato, dorme o torna a casa.",
+    "NOME: si sceglie all'inizio e non si può più cambiare.",
+    "CONTROLLI: tocca lo schermo per le coccole, usa i tasti o il menu per il resto. Il tasto centrale conferma.",
+    "VERSIONE 1.0 - creato con Claude"
+)

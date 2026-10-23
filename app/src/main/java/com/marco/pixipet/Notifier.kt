@@ -183,6 +183,7 @@ object Notifier {
             val txt = when (prevAway) {
                 1 -> "E' tornato dai genitori."
                 2 -> "E' tornato dalla vacanza con un souvenir."
+                5 -> "Ha finito la scuola: ora e' molto piu' sapiente."
                 else -> "Ha finito di lavorare e ha guadagnato delle monete."
             }
             post(ctx, ID_AWAY, "${p.name} e' tornato", txt)

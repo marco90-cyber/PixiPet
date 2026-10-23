@@ -173,10 +173,6 @@ fun makePet(
         s.rect(cx - rx + 1, cy - ry + 4, rx * 2 - 1, 3, col(0xE23B3B))
         s.rect(cx + rx - 1, cy - ry + 6, 3, 2, col(0xE23B3B))
     }
-    if (big && sp == 3) {
-        s.rect(cx - 4, cy + ry - 3, 9, 3, col(0xFFFFFF))
-        s.rect(cx - 4, cy + ry - 3, 9, 1, col(0xE23B3B))
-    }
 
     // viso
     if (stage == Stage.ELDER) {
@@ -279,6 +275,23 @@ fun drawFood(f: Fb, kind: Int, x: Int, y: Int) {
             f.tri(x + 1, y + 3, 3, col(0xFFC2DB))
             f.tri(x + 9, y + 3, 3, col(0xFFC2DB))
         }
+        5 -> { // pasta
+            f.ellipse(x + 5, y + 7, 5, 2, WHITE)
+            f.ellipse(x + 5, y + 5, 4, 2, col(0xF2C94C))
+            f.line(x + 2, y + 4, x + 8, y + 4, col(0xD9A92B))
+            f.line(x + 3, y + 6, x + 7, y + 6, col(0xD9A92B))
+            f.set(x + 5, y + 3, col(0xE23B3B))
+            f.set(x + 4, y + 4, col(0xE23B3B))
+            f.set(x + 6, y + 4, col(0xE23B3B))
+        }
+        6 -> { // coscia di pollo
+            f.ellipse(x + 6, y + 4, 4, 3, col(0xC8782E))
+            f.set(x + 5, y + 3, col(0xE6A05A))
+            f.set(x + 6, y + 2, col(0xE6A05A))
+            f.line(x + 4, y + 6, x + 1, y + 9, col(0xF4EBD8))
+            f.rect(x, y + 8, 2, 2, col(0xF4EBD8))
+            f.rect(x + 1, y + 9, 2, 1, col(0xF4EBD8))
+        }
         else -> { // torta
             f.rect(x + 1, y + 4, 9, 5, col(0xF7D6A6))
             f.rect(x + 1, y + 3, 9, 2, WHITE)
@@ -376,6 +389,10 @@ fun drawIcon(f: Fb, id: Int, x: Int, y: Int) {
             f.ellipse(x + 5, y + 5, 3, 3, col(0x8A4DFF))
             f.tri(x + 1, y + 3, 3, col(0xFF8A2B))
             f.tri(x + 9, y + 3, 3, col(0xFF8A2B))
+        }
+        18 -> { // pallina e barra
+            f.ellipse(x + 5, y + 3, 2, 2, col(0xFF6BA8))
+            f.rect(x + 1, y + 8, 8, 2, col(0x8A82A8))
         }
         17 -> { // quadro
             f.rect(x, y + 1, 10, 9, col(0xC9A227))

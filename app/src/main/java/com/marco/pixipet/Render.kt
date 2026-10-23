@@ -15,7 +15,7 @@ fun PixiGame.render(now: Long) {
     hits.clear()
     f.clear(PANEL)
     when (scr) {
-        Scr.HOME, Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.DEBUG, Scr.STATS, Scr.BG -> {
+        Scr.HOME, Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.DEBUG, Scr.STATS, Scr.BG, Scr.INFO -> {
             val theme = if (scr == Scr.BG && cursor in ROOM_NAMES.indices) cursor else pet.bg
             drawRoom(f, now, isNight() || pet.sleeping, theme)
             drawHomeScene(now)
@@ -31,6 +31,8 @@ fun PixiGame.render(now: Long) {
         Scr.G_CATCH -> drawCatch(now)
         Scr.G_HILO -> drawHilo(now)
         Scr.G_SWING -> drawSwing(now)
+        Scr.G_BOUNCE -> drawBounce(now)
+        Scr.G_MEM -> drawMem(now)
         Scr.G_END -> drawEnd(now)
         Scr.DEAD -> drawDead(now)
     }
@@ -258,6 +260,7 @@ private fun PixiGame.drawHomeScene(now: Long) {
         val what = when (pet.awayKind) {
             1 -> "DAI GENITORI"
             2 -> "IN VACANZA"
+            5 -> "A SCUOLA"
             else -> "AL LAVORO"
         }
         f.textC(what, 26, col(0x6B4423))
@@ -486,6 +489,54 @@ private fun PixiGame.drawCatch(now: Long) {
     for (i in 0 until cLives) drawHeart(f, W - 8 - i * 7, 2)
     val left = ((cEnd - now) / 1000L).coerceAtLeast(0L)
     f.textO("${left}S", 3, 10, WHITE)
+}
+
+private fun PixiGame.drawBounce(now: Long) {
+    val f = fb
+    f.grad(0, H, col(0x1E2A5A), col(0x3B2A6B))
+    for (i in 0 until 12) f.set((i * 29) % W, 14 + (i * 17) % 50, col(0x8FA3E0))
+    f.textO("RIMBALZI $rHits", 3, 2, WHITE)
+    for (i in 0 until rLives) drawHeart(f, W - 8 - i * 7, 2)
+    val left = ((rEnd - now) / 1000L).coerceAtLeast(0L)
+    f.textO("${left}S", 3, 10, WHITE)
+    val px = bx.toInt()
+    f.rect(px - 11, 72, 22, 4, col(0xE6E6F5))
+    f.rect(px - 11, 72, 22, 1, WHITE)
+    f.rect(px - 11, 75, 22, 1, col(0x8A82A8))
+    val blink = now < rServe && (now / 120L) % 2L == 0L
+    if (!blink) {
+        f.ellipse(rx.toInt(), ry.toInt(), 2, 2, col(0xFF6BA8))
+        f.set(rx.toInt() - 1, ry.toInt() - 1, WHITE)
+    }
+}
+
+private fun PixiGame.drawMem(now: Long) {
+    val f = fb
+    f.clear(col(0x1B1530))
+    val base = intArrayOf(col(0xB03A4A), col(0x3A9A56), col(0x3A5FB0), col(0xC9A227))
+    val bright = intArrayOf(col(0xFF6B7F), col(0x7CF09A), col(0x7FA3FF), col(0xFFE066))
+    var lit = -1
+    if (memPhase == 0) {
+        val i = ((now - memT0 - 600L) / 700L).toInt()
+        val frac = (now - memT0 - 600L) % 700L
+        if (i in 0 until memSeq.size && frac < 450L) lit = memSeq[i]
+    }
+    if (memLit >= 0 && now - memLitT < 250L) lit = memLit
+    for (q in 0 until 4) {
+        val x = 4 + (q % 2) * 38
+        val y = 16 + (q / 2) * 29
+        f.rect(x, y, 34, 26, if (q == lit) bright[q] else base[q])
+        f.frame(x, y, 34, 26, if (q == lit) WHITE else col(0x000000 or 0x1B1530))
+    }
+    f.textO("LIVELLO ${memSeq.size}", 3, 2, WHITE)
+    val msg = when (memPhase) {
+        0 -> "GUARDA"
+        1 -> "TOCCA A TE"
+        2 -> "SBAGLIATO"
+        3 -> "BRAVISSIMO!"
+        else -> "BENE!"
+    }
+    f.textR(msg, W - 3, 2, if (memPhase == 2) col(0xFF8A8A) else col(0x9BF0B0))
 }
 
 private fun PixiGame.drawHilo(now: Long) {

@@ -43,3 +43,5 @@ uccide/resuscita e invia una notifica di prova.
 - SFONDO nel menu: 5 stanze (classica, azzurra, menta, lavanda, arancio), 50 monete per cambiarla (primo tocco anteprima, secondo tocco compra).
 - Durante il bagno lo sfondo diventa un bagno con vasca e schiuma.
 - Dopo il nome si sceglie tra 5 uova di colore e forma diversi: ognuno ha un carattere (dolce, furbo, sportivo, goloso, burbero) con un piccolo bonus.
+- Nuovi giochi: Rimbalzo (pallina e barra) e Memoria (ripeti la sequenza di colori); Alto-Basso rimosso.
+- Nuovi cibi: pasta e pollo. Voce INFORMAZIONI nelle opzioni. Scuola: SCUOLA 2 ORE riempie la barra mente (richiamando prima non si ottiene nulla).
