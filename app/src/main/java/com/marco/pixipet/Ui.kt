@@ -124,6 +124,29 @@ fun PixiPetApp(game: PixiGame) {
         }
     }
 
+    if (game.askEgg) {
+        var sel by remember { mutableStateOf(-1) }
+        AlertDialog(
+            onDismissRequest = {},
+            confirmButton = {
+                TextButton(enabled = sel >= 0, onClick = { game.pickEgg(sel) }) { Text("SCEGLI") }
+            },
+            title = { Text("Scegli il tuo uovo") },
+            text = {
+                Column {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        for (i in 0 until 5) EggChoice(i, i == sel) { sel = i }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        if (sel >= 0) "${PERS[sel]}: ${EGG_DESC[sel]}" else "Tocca un uovo per scoprire il suo carattere.",
+                        fontSize = 14.sp
+                    )
+                }
+            }
+        )
+    }
+
     if (game.askName) {
         var nm by remember { mutableStateOf(NAMES.random()) }
         AlertDialog(
@@ -433,6 +456,29 @@ private fun ItemCard(item: Item, selected: Boolean, tile: Boolean, onClick: () -
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun EggChoice(i: Int, selected: Boolean, onClick: () -> Unit) {
+    val img = remember(i) {
+        val s = makePet(Stage.EGG, 0, i, M_NORMAL, false, false, 0, false)
+        Bitmap.createBitmap(s.px, 44, 46, Bitmap.Config.ARGB_8888).asImageBitmap()
+    }
+    val shape = RoundedCornerShape(10.dp)
+    Canvas(
+        Modifier
+            .size(width = 50.dp, height = 52.dp)
+            .clip(shape)
+            .background(if (selected) Color(0x33FFB3D1) else Color.Transparent)
+            .border(if (selected) 2.dp else 1.dp, if (selected) Gold else Color(0x33888888), shape)
+            .clickable { onClick() }
+    ) {
+        drawImage(
+            img,
+            dstSize = IntSize(size.width.toInt(), size.height.toInt()),
+            filterQuality = FilterQuality.None
+        )
     }
 }
 

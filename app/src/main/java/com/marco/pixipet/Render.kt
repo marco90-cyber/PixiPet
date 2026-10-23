@@ -15,8 +15,9 @@ fun PixiGame.render(now: Long) {
     hits.clear()
     f.clear(PANEL)
     when (scr) {
-        Scr.HOME, Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.DEBUG, Scr.STATS -> {
-            drawRoom(f, now, isNight() || pet.sleeping)
+        Scr.HOME, Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.DEBUG, Scr.STATS, Scr.BG -> {
+            val theme = if (scr == Scr.BG && cursor in ROOM_NAMES.indices) cursor else pet.bg
+            drawRoom(f, now, isNight() || pet.sleeping, theme)
             drawHomeScene(now)
             drawHud(now)
             if (pet.sleeping) {
@@ -68,7 +69,7 @@ private fun PixiGame.drawScene(s: Scr, now: Long) {
         Scr.SCHOOL -> drawSchool(fb, now)
         Scr.STAND -> drawStand(fb, now)
         Scr.UNDER -> drawUnder(fb, now)
-        else -> drawRoom(fb, now, isNight())
+        else -> drawRoom(fb, now, isNight(), pet.bg)
     }
 }
 
@@ -337,11 +338,11 @@ private fun PixiGame.drawAnim(now: Long) {
     val a = anim ?: return
     val f = fb
     val p = ((now - a.t0).toFloat() / a.dur).coerceIn(0f, 1f)
-    drawScene(a.back, now)
+    if (a.kind == A_BATH) drawBathroom(f, now) else drawScene(a.back, now)
     val gy = groundY(a.back)
     val x0 = 40
 
-    if (homeLike(a.back)) {
+    if (homeLike(a.back) && a.kind != A_BATH) {
         val spots = listOf(12 to 60, 62 to 62, 24 to 70, 50 to 72)
         val left = if (a.kind == A_CLEAN) Math.ceil((pet.poops * (1f - p)).toDouble()).toInt() else pet.poops
         for (i in 0 until left.coerceIn(0, 4)) drawPoop(f, spots[i].first, spots[i].second)
@@ -359,6 +360,7 @@ private fun PixiGame.drawAnim(now: Long) {
         }
         A_BATH -> {
             drawPetActor(now, x0, gy, M_HAPPY, false)
+            drawTubFront(f, now)
             for (i in 0 until 8) {
                 val bxx = x0 - 18 + (i * 7) % 36
                 val byy = gy - ((t * 2 + i * 11) % 40).toInt()

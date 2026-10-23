@@ -39,3 +39,7 @@ uccide/resuscita e invia una notifica di prova.
 - Quando l'animaletto dorme, la finestra mostra la notte con luna e stelle che brillano.
 - Se una statistica e' al 97% o piu', l'animaletto rifiuta di ripetere quell'azione (scuote la testa e dice NO).
 - Bancarella: LAVORA (5 secondi), LAVORA 10 MIN (guadagna di piu') e LAVORA 30 MIN (guadagna ancora di piu'). Durante il lavoro l'animaletto e' via; con RICHIAMA prima del tempo non si riceve nulla.
+- Il quadro a sinistra ora è un vero dipinto in cornice dorata.
+- SFONDO nel menu: 5 stanze (classica, azzurra, menta, lavanda, arancio), 50 monete per cambiarla (primo tocco anteprima, secondo tocco compra).
+- Durante il bagno lo sfondo diventa un bagno con vasca e schiuma.
+- Dopo il nome si sceglie tra 5 uova di colore e forma diversi: ognuno ha un carattere (dolce, furbo, sportivo, goloso, burbero) con un piccolo bonus.

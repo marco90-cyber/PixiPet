@@ -18,7 +18,7 @@ import kotlin.math.abs
 import kotlin.random.Random
 
 enum class Scr {
-    HOME, MENU, FOOD, PLAYLIST, MAP, STATS, SETTINGS, PARK, SCHOOL, STAND, UNDER,
+    HOME, MENU, FOOD, PLAYLIST, MAP, STATS, BG, SETTINGS, PARK, SCHOOL, STAND, UNDER,
     ANIM, G_CATCH, G_HILO, G_SWING, G_END, DEAD, DEBUG
 }
 
@@ -38,7 +38,7 @@ const val A_REFUSE = 12
 val SHELLS = longArrayOf(0xFFB3D1L, 0x9FE3C8L, 0x9CCBFFL, 0xFFE38AL, 0xC7B3FFL, 0xFFB98AL, 0xF2F2F2L)
 
 fun homeLike(s: Scr): Boolean = when (s) {
-    Scr.HOME, Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.DEBUG, Scr.STATS -> true
+    Scr.HOME, Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.DEBUG, Scr.STATS, Scr.BG -> true
     else -> false
 }
 
@@ -64,6 +64,8 @@ class PixiGame(val ctx: Context) {
     var image by mutableStateOf<ImageBitmap?>(null)
     var showRename by mutableStateOf(false)
     var askName by mutableStateOf(false)
+    var askEgg by mutableStateOf(false)
+    var bgSel = -1
     var shellIdx by mutableStateOf(prefs.getInt("shell", 0))
     var showShell by mutableStateOf(prefs.getBoolean("showShell", true))
     var sound = prefs.getBoolean("sound", true)
@@ -124,6 +126,7 @@ class PixiGame(val ctx: Context) {
 
     init {
         askName = !pet.named
+        askEgg = pet.named && !pet.eggPicked
         save()
     }
 
@@ -143,6 +146,7 @@ class PixiGame(val ctx: Context) {
         p.hue = rnd.nextInt(5)
         p.generation = gen
         p.named = false
+        p.eggPicked = false
         return p
     }
 
@@ -184,6 +188,7 @@ class PixiGame(val ctx: Context) {
         scr = s
         cursor = 0
         confirmReset = false
+        bgSel = -1
     }
 
     // ------------------------------------------------------------------ liste
@@ -211,6 +216,7 @@ class PixiGame(val ctx: Context) {
                 },
                 Item("GIOCA", enabled = free && child, icon = 4) { open(Scr.PLAYLIST) },
                 Item("MAPPA", enabled = !egg && !asleep, icon = 5) { open(Scr.MAP) },
+                Item("SFONDO", icon = 17) { open(Scr.BG) },
                 Item(if (asleep) "SVEGLIA" else "DORMI", enabled = !egg && !gone, icon = 11) { toggleSleep() },
                 Item("CURA", enabled = free && pet.sick, icon = 8) {
                     if (pet.coins >= 10) pet.coins -= 10
@@ -283,6 +289,8 @@ class PixiGame(val ctx: Context) {
                 },
                 Item("INDIETRO", icon = 10) { open(Scr.MENU) }
             )
+
+            Scr.BG -> bgItems()
 
             Scr.SETTINGS -> listOf(
                 Item(if (sound) "SUONO: SÌ" else "SUONO: NO") {
@@ -501,7 +509,7 @@ class PixiGame(val ctx: Context) {
         when (scr) {
             Scr.ANIM -> {}
             Scr.STATS -> {}
-            Scr.HOME, Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.DEBUG -> {
+            Scr.HOME, Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.DEBUG, Scr.BG -> {
                 val st = pet.stage(now())
                 if (!pet.sleeping && !away() && st != Stage.EGG) {
                     beep()
@@ -537,11 +545,41 @@ class PixiGame(val ctx: Context) {
         if (clean.isEmpty()) return
         pet.name = clean
         pet.named = true
-        pet.bornAt = now()
-        pet.lastTick = pet.bornAt
         askName = false
+        askEgg = true
         commit()
     }
+
+    /** Scelta dell'uovo: decide colore, forma e carattere. La vita parte da qui. */
+    fun pickEgg(i: Int) {
+        val k = i.coerceIn(0, 4)
+        pet.hue = k
+        pet.pers = k
+        pet.eggPicked = true
+        pet.bornAt = now()
+        pet.lastTick = pet.bornAt
+        askEgg = false
+        commit()
+    }
+
+    private fun bgItems(): List<Item> = ROOM_NAMES.indices.map { i ->
+        Item(ROOM_NAMES[i], if (i == pet.bg) "ATTIVO" else "50C", i == pet.bg || pet.coins >= 50, icon = 17) {
+            when {
+                i == pet.bg -> say("GIA' ATTIVO")
+                bgSel != i -> {
+                    bgSel = i
+                    say("TOCCA ANCORA")
+                }
+                else -> {
+                    pet.coins -= 50
+                    pet.bg = i
+                    bgSel = -1
+                    say("SFONDO CAMBIATO")
+                    commit()
+                }
+            }
+        }
+    } + Item("INDIETRO", icon = 10) { open(Scr.MENU) }
 
     fun rename(t: String) {
         val clean = t.trim().uppercase().filter { it.isLetterOrDigit() }.take(8)
@@ -599,7 +637,7 @@ class PixiGame(val ctx: Context) {
         when (a.kind) {
             A_FEED -> {
                 val f = FOODS[a.arg.coerceIn(0, FOODS.size - 1)]
-                pet.hunger += f.hunger
+                pet.hunger += f.hunger * (if (pet.pers == 3) 1.25f else 1f)
                 pet.happy += f.happy
                 pet.weight += f.weight
                 pet.cFood++
@@ -613,7 +651,7 @@ class PixiGame(val ctx: Context) {
                 pet.hygiene += 10f
             }
             A_PET -> {
-                pet.happy += 10f
+                pet.happy += if (pet.pers == 0) 15f else 10f
                 pet.cPet++
             }
             A_MED -> {
@@ -622,20 +660,21 @@ class PixiGame(val ctx: Context) {
                 pet.happy -= 5f
             }
             A_STUDY -> {
-                pet.smarts += 12f
+                pet.smarts += if (pet.pers == 1) 18f else 12f
                 pet.energy -= 8f
                 pet.hunger -= 5f
                 pet.cStudy++
             }
             A_WORK -> {
-                val gain = 12 + rnd.nextInt(10) + (pet.smarts / 10f).toInt()
+                var gain = 12 + rnd.nextInt(10) + (pet.smarts / 10f).toInt()
+                if (pet.pers == 4) gain = (gain * 1.2f).toInt()
                 pet.coins += gain
                 pet.energy -= 12f
                 pet.hygiene -= 6f
                 say("+$gain MONETE")
             }
             A_BALL -> {
-                pet.active += 12f
+                pet.active += if (pet.pers == 2) 18f else 12f
                 pet.happy += 8f
                 pet.energy -= 10f
                 pet.hunger -= 6f
@@ -1073,6 +1112,7 @@ class PixiGame(val ctx: Context) {
         Scr.PLAYLIST -> "GIOCA"
         Scr.MAP -> "MAPPA"
         Scr.SETTINGS -> "OPZIONI"
+        Scr.BG -> "SFONDO"
         Scr.DEBUG -> "DEBUG"
         Scr.STATS -> "STATO"
         Scr.PARK -> "PARCO"
@@ -1088,14 +1128,14 @@ class PixiGame(val ctx: Context) {
     }
 
     fun canGoBack(): Boolean = when (scr) {
-        Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.STATS, Scr.DEBUG,
+        Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.STATS, Scr.DEBUG, Scr.BG,
         Scr.PARK, Scr.SCHOOL, Scr.STAND, Scr.UNDER -> true
         else -> false
     }
 
     fun back() {
         when (scr) {
-            Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.STATS -> open(Scr.HOME)
+            Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.STATS, Scr.BG -> open(Scr.HOME)
             Scr.DEBUG -> open(Scr.SETTINGS)
             Scr.PARK, Scr.SCHOOL, Scr.STAND, Scr.UNDER -> open(Scr.MAP)
             else -> {}

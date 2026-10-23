@@ -10,6 +10,13 @@ enum class Stage(val label: String) {
 fun Stage.atLeast(o: Stage) = ordinal >= o.ordinal
 
 val PERS = arrayOf("DOLCE", "FURBO", "SPORTIVO", "GOLOSO", "BURBERO")
+val EGG_DESC = arrayOf(
+    "adora le coccole: dà più felicità",
+    "impara in fretta: studia meglio",
+    "ama muoversi: più forma col gioco",
+    "sempre affamato: il cibo sazia di più",
+    "brontolone ma tosto: guadagna di più lavorando"
+)
 val NAMES = listOf("MOCHI", "PIXEL", "BIBI", "NORI", "TOFU", "LUNA", "KIKO", "MOMO", "PIP", "ZUZU", "COCO", "NANA")
 
 /** Durate in minuti reali di vita. */
@@ -69,6 +76,8 @@ class Pet(var bornAt: Long) {
     var dates = 0
     var games = 0
     var named = true
+    var eggPicked = true
+    var bg = 0
 
     fun ageMin(now: Long): Float {
         val end = if (dead) diedAt else now
@@ -249,7 +258,7 @@ class Pet(var bornAt: Long) {
         put("gen", generation); put("coins", coins); put("candy", candy); put("pers", pers)
         put("cFood", cFood); put("cStudy", cStudy); put("cPlay", cPlay); put("cPet", cPet)
         put("immortal", immortal); put("angel", angel); put("awayUntil", awayUntil); put("awayKind", awayKind)
-        put("dates", dates); put("games", games); put("named", named)
+        put("dates", dates); put("games", games); put("named", named); put("eggPicked", eggPicked); put("bg", bg)
     }
 
     companion object {
@@ -290,6 +299,8 @@ class Pet(var bornAt: Long) {
             p.dates = j.optInt("dates", 0)
             p.games = j.optInt("games", 0)
             p.named = j.optBoolean("named", true)
+            p.eggPicked = j.optBoolean("eggPicked", true)
+            p.bg = j.optInt("bg", 0)
             return p
         }
     }

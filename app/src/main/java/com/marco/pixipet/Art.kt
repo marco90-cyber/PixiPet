@@ -52,12 +52,30 @@ fun makePet(
     val by = 43
 
     if (stage == Stage.EGG) {
-        val c = BODY[hue.coerceIn(0, 4)]
-        s.ellipse(cx, 30, 9, 12, col(0xFFF6E4))
-        s.ellipse(cx - 3, 26, 2, 2, c)
-        s.ellipse(cx + 4, 32, 3, 2, c)
-        s.ellipse(cx - 2, 37, 2, 1, c)
-        s.rect(cx - 5, 22, 2, 3, WHITE)
+        val h = hue.coerceIn(0, 4)
+        val c = BODY[h]
+        val shell = lighten(c, 0.62f)
+        val cy = when (h) { 0 -> 30; 1 -> 28; 2 -> 31; 3 -> 33; else -> 30 }
+        when (h) {
+            0 -> s.ellipse(cx, cy, 9, 12, shell)
+            1 -> s.ellipse(cx, cy, 7, 14, shell)
+            2 -> s.ellipse(cx, cy, 11, 11, shell)
+            3 -> s.ellipse(cx, cy, 12, 9, shell)
+            else -> s.ellipse(cx, cy, 9, 12, shell)
+        }
+        val dk = mix(c, OUT, 0.15f)
+        for (yy in 0 until 46) for (xx in 0 until 44) {
+            if (s.get(xx, yy) != shell) continue
+            val paint = when (h) {
+                0 -> (xx * 3 + yy * 5) % 11 == 0 || (xx + yy * 2) % 13 == 0
+                1 -> yy % 6 < 2 && yy > cy - 8
+                2 -> kotlin.math.abs(yy - cy) <= 2 && (xx + yy) % 4 < 2
+                3 -> ((xx / 3) + (yy / 3)) % 2 == 0 && yy > cy - 3
+                else -> (xx + yy) % 6 < 2
+            }
+            if (paint) s.set(xx, yy, if (h == 4) dk else c)
+        }
+        s.rect(cx - 5, cy - 8, 2, 3, WHITE)
         s.outline(OUT)
         return s
     }
@@ -359,6 +377,13 @@ fun drawIcon(f: Fb, id: Int, x: Int, y: Int) {
             f.tri(x + 1, y + 3, 3, col(0xFF8A2B))
             f.tri(x + 9, y + 3, 3, col(0xFF8A2B))
         }
+        17 -> { // quadro
+            f.rect(x, y + 1, 10, 9, col(0xC9A227))
+            f.rect(x + 1, y + 2, 8, 7, col(0xBFE3FF))
+            f.rect(x + 1, y + 6, 8, 3, col(0x5DAA5D))
+            f.tri(x + 4, y + 4, 3, col(0x6C7A99))
+            f.set(x + 7, y + 3, YELLOW)
+        }
         16 -> { // libro
             f.rect(x + 1, y + 1, 8, 8, col(0x4D8BFF))
             f.rect(x + 2, y + 2, 6, 6, WHITE)
@@ -397,20 +422,38 @@ fun drawCoin(f: Fb, x: Int, y: Int) {
 
 // ------------------------------------------------------------------- scene
 
-fun drawRoom(f: Fb, now: Long, night: Boolean) {
-    val wall = col(0xF6E6CF)
-    val wall2 = col(0xEDD6B3)
+val ROOM_NAMES = arrayOf("CLASSICA", "AZZURRA", "MENTA", "LAVANDA", "ARANCIO")
+
+// parete, parete2, battiscopa, pavimento, linee, tappeto1, tappeto2, tenda, cornice-quadro
+private val ROOMS = arrayOf(
+    intArrayOf(0xF6E6CF, 0xEDD6B3, 0xB98B5E, 0xDDAA6E, 0xC49058, 0xE08C8C, 0xF2B6B6, 0xE56B8A),
+    intArrayOf(0xDCEEFF, 0xC4E0FA, 0x8AA9C8, 0xC9B089, 0xAE956E, 0x6FA8DC, 0xA9CDF0, 0x3E78C2),
+    intArrayOf(0xE4F5DF, 0xCDEBC6, 0x7FA877, 0xCFCFC4, 0xB1B1A4, 0x7BC47B, 0xB0E0AC, 0x3E9A4A),
+    intArrayOf(0xEFE3FA, 0xDCC9F2, 0x9A7DC0, 0xA48B78, 0x8A7260, 0xA77BDB, 0xCBB0F0, 0x7C4FC2),
+    intArrayOf(0xFFEBD2, 0xFFD9A8, 0xC98B4B, 0xD6A368, 0xB88650, 0xF08A3C, 0xFFC187, 0xD9622B)
+)
+
+fun drawRoom(f: Fb, now: Long, night: Boolean, theme: Int = 0) {
+    val t = ROOMS[theme.coerceIn(0, ROOMS.size - 1)]
+    val wall = col(t[0])
+    val wall2 = col(t[1])
     f.rect(0, 0, W, 54, wall)
-    for (x in 0 until W step 8) f.rect(x, 0, 4, 54, wall2)
-    f.rect(0, 52, W, 3, col(0xB98B5E))
-    f.rect(0, 55, W, 25, col(0xDDAA6E))
+    when (theme) {
+        1 -> for (x in 0 until W step 8) f.rect(x, 0, 3, 54, wall2)
+        2 -> for (y in 0 until 54 step 8) for (x in (if ((y / 8) % 2 == 0) 0 else 4) until W step 8) f.rect(x, y, 2, 2, wall2)
+        3 -> for (y in 0 until 54 step 12) f.rect(0, y, W, 5, wall2)
+        4 -> for (y in 0 until 54 step 8) for (x in (if ((y / 8) % 2 == 0) 0 else 8) until W step 16) f.rect(x, y, 8, 8, wall2)
+        else -> for (x in 0 until W step 8) f.rect(x, 0, 4, 54, wall2)
+    }
+    f.rect(0, 52, W, 3, col(t[2]))
+    f.rect(0, 55, W, 25, col(t[3]))
     var y = 55
     var odd = false
     while (y < H) {
-        f.rect(0, y, W, 1, col(0xC49058))
+        f.rect(0, y, W, 1, col(t[4]))
         var x = if (odd) 6 else 0
         while (x < W) {
-            f.rect(x, y, 1, 6, col(0xC49058))
+            f.rect(x, y, 1, 6, col(t[4]))
             x += 12
         }
         odd = !odd
@@ -420,18 +463,62 @@ fun drawRoom(f: Fb, now: Long, night: Boolean) {
     f.rect(50, 8, 24, 24, col(0x9B6A3C))
     drawWindowSky(f, night, now)
     f.rect(48, 6, 28, 3, col(0x7A4F28))
-    f.rect(48, 6, 5, 26, col(0xE56B8A))
-    f.rect(71, 6, 5, 26, col(0xE56B8A))
-    // quadro
-    f.rect(8, 10, 18, 14, col(0x7A4F28))
-    f.rect(10, 12, 14, 10, col(0xBDE6FF))
-    f.ellipse(14, 24, 7, 4, col(0x6FCF6F))
-    f.ellipse(21, 23, 6, 3, col(0x4FA84F))
-    f.ellipse(20, 15, 2, 2, YELLOW)
+    f.rect(48, 6, 5, 26, col(t[7]))
+    f.rect(71, 6, 5, 26, col(t[7]))
+    // quadro: tela con montagne e sole, in cornice dorata
+    f.rect(6, 9, 22, 18, col(0xC9A227))
+    f.rect(7, 10, 20, 16, col(0xF2D56B))
+    f.rect(9, 12, 16, 12, col(0xBFE3FF))
+    f.ellipse(21, 15, 2, 2, YELLOW)
+    f.tri(13, 17, 6, col(0x6C7A99))
+    f.tri(19, 19, 4, col(0x7F8DAA))
+    f.rect(9, 21, 16, 3, col(0x5DAA5D))
+    f.set(12, 22, col(0xFF6B8A))
+    f.set(17, 21, WHITE)
+    f.set(16, 7, col(0x6B4423))
+    f.set(17, 8, col(0x6B4423))
     // tappeto
-    f.ellipse(40, 69, 27, 6, col(0xE08C8C))
-    f.ellipse(40, 69, 21, 4, col(0xF2B6B6))
-    f.ellipse(40, 69, 10, 2, col(0xE08C8C))
+    f.ellipse(40, 69, 27, 6, col(t[5]))
+    f.ellipse(40, 69, 21, 4, col(t[6]))
+    f.ellipse(40, 69, 10, 2, col(t[5]))
+}
+
+/** Bagno: pareti piastrellate, specchio e vasca (la parte davanti si disegna sopra l'animaletto). */
+fun drawBathroom(f: Fb, now: Long) {
+    f.rect(0, 0, W, 80, col(0xD3F0F7))
+    for (x in 0 until W step 8) f.rect(x, 0, 1, 56, col(0xAEDCE8))
+    for (y in 0 until 56 step 8) f.rect(0, y, W, 1, col(0xAEDCE8))
+    f.rect(0, 54, W, 3, col(0x8FB9C7))
+    for (y in 57 until H step 8) for (x in 0 until W step 8) {
+        f.rect(x, y, 8, 8, if (((x / 8) + (y / 8)) % 2 == 0) col(0xF4F7F8) else col(0xC7D3D8))
+    }
+    // specchio
+    f.rect(8, 8, 20, 24, col(0x9AA7B5))
+    f.rect(10, 10, 16, 20, col(0xE9F6FF))
+    f.rect(12, 12, 3, 8, WHITE)
+    // asciugamano
+    f.rect(54, 14, 18, 2, col(0x9AA7B5))
+    f.rect(56, 16, 14, 16, col(0xFF9EC4))
+    f.rect(56, 28, 14, 2, col(0xFFC7DC))
+    // bordo vasca (dietro)
+    f.rect(8, 52, 64, 6, col(0xFFFFFF))
+    f.frame(8, 52, 64, 6, col(0x9AA7B5))
+}
+
+fun drawTubFront(f: Fb, now: Long) {
+    f.rect(8, 58, 64, 18, col(0xF4F4F4))
+    f.frame(8, 58, 64, 18, col(0x9AA7B5))
+    f.rect(10, 60, 60, 4, col(0x7FD0F5))
+    f.rect(12, 61, 14, 1, col(0xBFEAFF))
+    f.rect(12, 76, 5, 3, col(0x9AA7B5))
+    f.rect(63, 76, 5, 3, col(0x9AA7B5))
+    // schiuma
+    val t = now / 300L
+    for (i in 0 until 7) {
+        val bx = 12 + i * 9 + ((t + i) % 2L).toInt()
+        f.ellipse(bx, 58, 4, 3, WHITE)
+        f.set(bx - 1, 57, col(0xCFEFFF))
+    }
 }
 
 fun drawPark(f: Fb, now: Long) {
