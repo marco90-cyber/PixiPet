@@ -134,9 +134,9 @@ fun PixiPetApp(game: PixiGame) {
                 }) { Text("OK") }
             },
             dismissButton = {
-                TextButton(onClick = { game.showRename = false }) { Text("CANCEL") }
+                TextButton(onClick = { game.showRename = false }) { Text("ANNULLA") }
             },
-            title = { Text("Rename") },
+            title = { Text("Rinomina") },
             text = {
                 OutlinedTextField(
                     value = txt,
@@ -284,7 +284,7 @@ private fun MenuPanel(game: PixiGame, modifier: Modifier) {
         ) {
             if (game.canGoBack()) {
                 Text(
-                    "‹ BACK",
+                    "‹ INDIETRO",
                     color = Pink,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
@@ -429,26 +429,26 @@ private fun PixelIcon(id: Int, food: Int, dp: Dp) {
 private fun StatsView(game: PixiGame, @Suppress("UNUSED_PARAMETER") rev: Int, modifier: Modifier) {
     val pet = game.pet
     val now = System.currentTimeMillis()
-    val trait = if (pet.immortal) "IMMORTAL" else if (pet.angel) "ANGEL" else "-"
+    val trait = if (pet.immortal) "IMMORTALE" else if (pet.angel) "ANGELO" else "-"
     Column(modifier.verticalScroll(rememberScrollState())) {
-        StatBar("HUNGER", pet.hunger)
-        StatBar("HYGIENE", pet.hygiene)
-        StatBar("HAPPY", pet.happy)
-        StatBar("ENERGY", pet.energy)
-        StatBar("SMARTS", pet.smarts)
-        StatBar("ACTIVE", pet.active)
+        StatBar("FAME", pet.hunger)
+        StatBar("PULIZIA", pet.hygiene)
+        StatBar("FELICITA'", pet.happy)
+        StatBar("ENERGIA", pet.energy)
+        StatBar("MENTE", pet.smarts)
+        StatBar("FORMA", pet.active)
         Spacer(Modifier.height(10.dp))
-        InfoRow("NAME", pet.name)
-        InfoRow("STAGE", pet.stage(now).label)
-        InfoRow("AGE", ageText(pet.ageMin(now)))
-        InfoRow("TYPE", if (pet.pers >= 0) PERS[pet.pers] else "?")
-        InfoRow("WEIGHT", "${pet.weight}")
-        InfoRow("COINS", "${pet.coins}")
-        InfoRow("CANDY", "${pet.candy}")
-        InfoRow("DATES", "${pet.dates}")
-        InfoRow("GAMES", "${pet.games}")
-        InfoRow("GENERATION", "${pet.generation}")
-        InfoRow("TRAIT", trait)
+        InfoRow("NOME", pet.name)
+        InfoRow("FASE", pet.stage(now).label)
+        InfoRow("ETA'", ageText(pet.ageMin(now)))
+        InfoRow("CARATTERE", if (pet.pers >= 0) PERS[pet.pers] else "?")
+        InfoRow("PESO", "${pet.weight}")
+        InfoRow("MONETE", "${pet.coins}")
+        InfoRow("CARAMELLE", "${pet.candy}")
+        InfoRow("APPUNTAMENTI", "${pet.dates}")
+        InfoRow("PARTITE", "${pet.games}")
+        InfoRow("GENERAZIONE", "${pet.generation}")
+        InfoRow("DONO", trait)
     }
 }
 
@@ -470,7 +470,7 @@ private fun StatBar(label: String, value: Float) {
             fontWeight = FontWeight.Bold,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
-            modifier = Modifier.width(78.dp)
+            modifier = Modifier.width(90.dp)
         )
         Box(
             Modifier

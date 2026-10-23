@@ -4,12 +4,12 @@ import org.json.JSONObject
 import kotlin.random.Random
 
 enum class Stage(val label: String) {
-    EGG("EGG"), BABY("BABY"), CHILD("CHILD"), TEEN("TEEN"), ADULT("ADULT"), ELDER("ELDER")
+    EGG("UOVO"), BABY("NEONATO"), CHILD("BAMBINO"), TEEN("ADOLESC."), ADULT("ADULTO"), ELDER("ANZIANO")
 }
 
 fun Stage.atLeast(o: Stage) = ordinal >= o.ordinal
 
-val PERS = arrayOf("SWEET", "SMART", "SPORTY", "GREEDY", "GRUMPY")
+val PERS = arrayOf("DOLCE", "FURBO", "SPORTIVO", "GOLOSO", "BURBERO")
 val NAMES = listOf("MOCHI", "PIXEL", "BIBI", "NORI", "TOFU", "LUNA", "KIKO", "MOMO", "PIP", "ZUZU", "COCO", "NANA")
 
 /** Durate in minuti reali di vita. */
@@ -25,11 +25,11 @@ object Cfg {
 class Food(val name: String, val price: Int, val hunger: Float, val happy: Float, val weight: Int, val kind: Int)
 
 val FOODS = listOf(
-    Food("RICE BALL", 5, 25f, 2f, 1, 0),
-    Food("BURGER", 12, 40f, 6f, 2, 1),
-    Food("SALAD", 8, 20f, 0f, 0, 2),
-    Food("CANDY", 3, 4f, 15f, 1, 3),
-    Food("CAKE", 15, 12f, 25f, 2, 4)
+    Food("ONIGIRI", 5, 25f, 2f, 1, 0),
+    Food("HAMBURGER", 12, 40f, 6f, 2, 1),
+    Food("INSALATA", 8, 20f, 0f, 0, 2),
+    Food("CARAMELLA", 3, 4f, 15f, 1, 3),
+    Food("TORTA", 15, 12f, 25f, 2, 4)
 )
 
 class Pet(var bornAt: Long) {
@@ -116,7 +116,7 @@ class Pet(var bornAt: Long) {
     }
 
     /** Fine di genitori/vacanza: applica i bonus e ritorna il tipo di assenza appena terminata. */
-    fun finishAway(): Int {
+    fun finishAway(rnd: Random = Random.Default): Int {
         val kind = awayKind
         when (kind) {
             1 -> {
@@ -132,11 +132,31 @@ class Pet(var bornAt: Long) {
                 hunger = maxOf(hunger, 60f)
                 coins += 20
             }
+            3 -> { // lavoro da 10 minuti
+                coins += 45 + rnd.nextInt(16) + (smarts / 10f).toInt()
+                energy -= 15f
+                hygiene -= 8f
+                hunger -= 8f
+                happy -= 5f
+            }
+            4 -> { // lavoro da 30 minuti
+                coins += 150 + rnd.nextInt(41) + (smarts / 5f).toInt()
+                energy -= 25f
+                hygiene -= 15f
+                hunger -= 12f
+                happy -= 8f
+            }
         }
         awayKind = 0
         awayUntil = 0L
         clamp()
         return kind
+    }
+
+    /** Richiamo anticipato: niente premio ne' bonus. */
+    fun cancelAway() {
+        awayKind = 0
+        awayUntil = 0L
     }
 
     private fun die(why: String, at: Long) {
@@ -154,7 +174,7 @@ class Pet(var bornAt: Long) {
         val age = ageMin(at)
         if (age < Cfg.EGG_MIN) return
         if (!immortal && age >= Cfg.DEATH_MIN) {
-            die("OLD AGE", at)
+            die("VECCHIAIA", at)
             return
         }
 
@@ -190,7 +210,7 @@ class Pet(var bornAt: Long) {
             happy -= 0.4f
             if (sickMin >= 240f && !immortal) {
                 clamp()
-                die("ILLNESS", at)
+                die("MALATTIA", at)
                 return
             }
         }
@@ -199,7 +219,7 @@ class Pet(var bornAt: Long) {
             starveMin += 1f
             if (starveMin >= 180f && !immortal) {
                 clamp()
-                die("HUNGER", at)
+                die("FAME", at)
                 return
             }
         } else {

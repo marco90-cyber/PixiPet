@@ -180,7 +180,11 @@ object Notifier {
         }
 
         if (prevAway != 0 && p.awayKind == 0 && !p.dead && on) {
-            val txt = if (prevAway == 1) "E' tornato dai genitori." else "E' tornato dalla vacanza con un souvenir."
+            val txt = when (prevAway) {
+                1 -> "E' tornato dai genitori."
+                2 -> "E' tornato dalla vacanza con un souvenir."
+                else -> "Ha finito di lavorare e ha guadagnato delle monete."
+            }
             post(ctx, ID_AWAY, "${p.name} e' tornato", txt)
         }
 

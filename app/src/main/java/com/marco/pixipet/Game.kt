@@ -33,6 +33,7 @@ const val A_BALL = 8
 const val A_DATE = 9
 const val A_TALK = 10
 const val A_ANGEL = 11
+const val A_REFUSE = 12
 
 val SHELLS = longArrayOf(0xFFB3D1L, 0x9FE3C8L, 0x9CCBFFL, 0xFFE38AL, 0xC7B3FFL, 0xFFB98AL, 0xF2F2F2L)
 
@@ -195,50 +196,66 @@ class PixiGame(val ctx: Context) {
 
         return when (scr) {
             Scr.HOME, Scr.MENU -> listOf(
-                Item("FEED", enabled = free, icon = 0) { open(Scr.FOOD) },
-                Item("BATH", enabled = free, icon = 1) { startAnim(A_BATH, 2800L, 0, Scr.HOME) },
-                Item("CLEAN", enabled = free, icon = 2) {
-                    if (pet.poops > 0) startAnim(A_CLEAN, 2400L, 0, Scr.HOME) else say("ALL CLEAN")
+                Item("MANGIA", enabled = free, icon = 0) { open(Scr.FOOD) },
+                Item("BAGNO", enabled = free, icon = 1) {
+                    if (pet.hygiene >= 97f) refuse("E' GIA' PULITO") else startAnim(A_BATH, 2800L, 0, Scr.HOME)
                 },
-                Item("PET", enabled = free, icon = 3) { startAnim(A_PET, 2400L, 0, Scr.HOME) },
-                Item("PLAY", enabled = free && child, icon = 4) { open(Scr.PLAYLIST) },
-                Item("MAP", enabled = !egg && !asleep, icon = 5) { open(Scr.MAP) },
-                Item("STATS", icon = 6) { open(Scr.STATS) },
-                Item(if (asleep) "WAKE" else "SLEEP", enabled = !egg && !gone, icon = 11) { toggleSleep() },
-                Item("MEDS", enabled = free && pet.sick, icon = 8) {
+                Item("PULISCI", enabled = free, icon = 2) {
+                    if (pet.poops > 0) startAnim(A_CLEAN, 2400L, 0, Scr.HOME) else say("TUTTO PULITO")
+                },
+                Item("COCCOLE", enabled = free, icon = 3) {
+                    if (pet.happy >= 97f) refuse("E' GIA' FELICE") else startAnim(A_PET, 2400L, 0, Scr.HOME)
+                },
+                Item("GIOCA", enabled = free && child, icon = 4) { open(Scr.PLAYLIST) },
+                Item("MAPPA", enabled = !egg && !asleep, icon = 5) { open(Scr.MAP) },
+                Item("STATO", icon = 6) { open(Scr.STATS) },
+                Item(if (asleep) "SVEGLIA" else "DORMI", enabled = !egg && !gone, icon = 11) { toggleSleep() },
+                Item("CURA", enabled = free && pet.sick, icon = 8) {
                     if (pet.coins >= 10) pet.coins -= 10
                     startAnim(A_MED, 2600L, 0, Scr.HOME)
                 },
-                Item("SETUP", icon = 9) { open(Scr.SETTINGS) }
+                Item("OPZIONI", icon = 9) { open(Scr.SETTINGS) }
             )
 
             Scr.FOOD -> FOODS.mapIndexed { i, f ->
                 Item(f.name, "${f.price}C", pet.coins >= f.price, food = f.kind) {
-                    pet.coins -= f.price
-                    startAnim(A_FEED, 2400L, i, Scr.HOME)
+                    if (pet.hunger >= 97f) {
+                        refuse("NON HA FAME")
+                    } else if (f.happy >= f.hunger && pet.happy >= 97f) {
+                        refuse("E' GIA' FELICE")
+                    } else {
+                        pet.coins -= f.price
+                        startAnim(A_FEED, 2400L, i, Scr.HOME)
+                    }
                 }
-            } + Item("BACK", icon = 10) { open(Scr.MENU) }
+            } + Item("INDIETRO", icon = 10) { open(Scr.MENU) }
 
             Scr.PLAYLIST -> listOf(
-                Item("TRICK TREAT", "E-10", pet.energy >= 15f, icon = 15) { startCatch(now()) },
-                Item("HI-LO", "E-8", pet.energy >= 15f, icon = 16) { startHilo(now()) },
-                Item("SWING", "E-12", pet.energy >= 15f, icon = 4) { startSwing(now()) },
-                Item("BACK", icon = 10) { open(Scr.MENU) }
+                Item("DOLCETTI", "E-10", pet.energy >= 15f, icon = 15) {
+                    if (pet.happy >= 97f) refuse("E' GIA' FELICE") else startCatch(now())
+                },
+                Item("ALTO-BASSO", "E-8", pet.energy >= 15f, icon = 16) {
+                    if (pet.smarts >= 97f) refuse("SA GIA' TUTTO") else startHilo(now())
+                },
+                Item("BATTUTA", "E-12", pet.energy >= 15f, icon = 4) {
+                    if (pet.active >= 97f) refuse("E' GIA' IN FORMA") else startSwing(now())
+                },
+                Item("INDIETRO", icon = 10) { open(Scr.MENU) }
             )
 
             Scr.MAP -> listOf(
-                Item("HOME") { scr = Scr.HOME; cursor = 0 },
-                Item("PARK", "", !gone && child) { open(Scr.PARK) },
-                Item("SCHOOL", "", !gone && child) { open(Scr.SCHOOL) },
-                Item("STAND", "WORK", !gone && teen) { open(Scr.STAND) },
+                Item("CASA") { scr = Scr.HOME; cursor = 0 },
+                Item("PARCO", "", !gone && child) { open(Scr.PARK) },
+                Item("SCUOLA", "", !gone && child) { open(Scr.SCHOOL) },
+                Item("BANCARELLA", "LAVORO", !gone && teen) { open(Scr.STAND) },
                 if (gone) {
-                    Item("CALL BACK") {
-                        finishAway()
+                    Item("RICHIAMA") {
+                        callBack()
                         scr = Scr.HOME
                     }
                 } else {
                     Item(
-                        "PARENTS", "3-18H",
+                        "GENITORI", "3-18",
                         st.ordinal in Stage.CHILD.ordinal..Stage.TEEN.ordinal &&
                             (dbgAnyHour || hour() in 3..17)
                     ) {
@@ -246,138 +263,150 @@ class PixiGame(val ctx: Context) {
                         pet.awayUntil = now() + 6L * 3600000L
                         scr = Scr.HOME
                         commit()
-                        say("BYE BYE")
+                        say("CIAO CIAO")
                     }
                 },
-                Item("UNDERWORLD", "10 CANDY", !gone && teen && pet.candy >= 10) {
+                Item("ALDILA", "10 CARAM.", !gone && teen && pet.candy >= 10) {
                     pet.candy -= 10
                     commit()
                     open(Scr.UNDER)
                 },
-                Item("VACATION", "200C", !gone && !egg && pet.coins >= 200) {
+                Item("VACANZA", "200C", !gone && !egg && pet.coins >= 200) {
                     pet.coins -= 200
                     pet.awayKind = 2
                     pet.awayUntil = now() + 3600000L
                     scr = Scr.HOME
                     commit()
-                    say("BON VOYAGE")
+                    say("BUON VIAGGIO")
                 },
-                Item("BACK", icon = 10) { open(Scr.MENU) }
+                Item("INDIETRO", icon = 10) { open(Scr.MENU) }
             )
 
             Scr.SETTINGS -> listOf(
-                Item(if (sound) "SOUND ON" else "SOUND OFF") {
+                Item(if (sound) "SUONO SI" else "SUONO NO") {
                     sound = !sound
                     prefs.edit().putBoolean("sound", sound).apply()
                 },
-                Item(if (prefs.getBoolean("notify", true)) "NOTIFY ON" else "NOTIFY OFF") {
+                Item(if (prefs.getBoolean("notify", true)) "NOTIFICHE SI" else "NOTIFICHE NO") {
                     prefs.edit().putBoolean("notify", !prefs.getBoolean("notify", true)).apply()
                 },
-                Item("SHELL COLOR") {
+                Item("COLORE GUSCIO") {
                     shellIdx = (shellIdx + 1) % SHELLS.size
                     prefs.edit().putInt("shell", shellIdx).apply()
                 },
-                Item(if (showShell) "SHELL ON" else "SHELL OFF") {
+                Item(if (showShell) "GUSCIO SI" else "GUSCIO NO") {
                     showShell = !showShell
                     prefs.edit().putBoolean("showShell", showShell).apply()
                 },
-                Item("RENAME") { showRename = true },
-                Item("EXPORT SAVE") { exportSave() },
-                Item("IMPORT SAVE") { importSave() },
-                Item(if (confirmReset) "SURE? OK=NEW" else "NEW EGG") {
+                Item("RINOMINA") { showRename = true },
+                Item("ESPORTA DATI") { exportSave() },
+                Item("IMPORTA DATI") { importSave() },
+                Item(if (confirmReset) "SICURO? OK=NUOVO" else "NUOVO UOVO") {
                     if (confirmReset) newPet() else confirmReset = true
                 },
                 Item("DEBUG") { open(Scr.DEBUG) },
-                Item("BACK", icon = 10) { open(Scr.MENU) }
+                Item("INDIETRO", icon = 10) { open(Scr.MENU) }
             )
 
             Scr.DEBUG -> listOf(
-                Item("STAGE NEXT") { dbgNextStage() },
-                Item("AGE +1H") { dbgShift(60, false) },
-                Item("AGE +1D") { dbgShift(1440, false) },
-                Item("SKIP +1H") { dbgShift(60, true) },
-                Item("SKIP +1D") { dbgShift(1440, true) },
-                Item("COINS +100") {
+                Item("FASE SUCCESSIVA") { dbgNextStage() },
+                Item("ETA' +1 ORA") { dbgShift(60, false) },
+                Item("ETA' +1 GIORNO") { dbgShift(1440, false) },
+                Item("SALTA +1 ORA") { dbgShift(60, true) },
+                Item("SALTA +1 GIORNO") { dbgShift(1440, true) },
+                Item("MONETE +100") {
                     pet.coins += 100
-                    dbg("+100 COINS")
+                    dbg("+100 MONETE")
                 },
-                Item("CANDY +10") {
+                Item("CARAMELLE +10") {
                     pet.candy += 10
-                    dbg("+10 CANDY")
+                    dbg("+10 CARAMELLE")
                 },
-                Item("ALL FULL") { dbgFill() },
-                Item("ALL LOW") { dbgLow() },
-                Item(if (pet.sick) "CURE SICK" else "MAKE SICK") {
+                Item("TUTTO PIENO") { dbgFill() },
+                Item("TUTTO BASSO") { dbgLow() },
+                Item(if (pet.sick) "GUARISCI" else "AMMALA") {
                     pet.sick = !pet.sick
                     pet.sickMin = 0f
-                    dbg(if (pet.sick) "SICK" else "CURED")
+                    dbg(if (pet.sick) "MALATO" else "GUARITO")
                 },
-                Item("POOP +1") {
+                Item("CACCA +1") {
                     pet.poops = (pet.poops + 1).coerceAtMost(4)
-                    dbg("POOP")
+                    dbg("CACCA")
                 },
-                Item("TYPE NEXT") {
+                Item("CARATTERE SUCC.") {
                     pet.pers = (pet.pers + 1) % 5
                     dbg(PERS[pet.pers])
                 },
-                Item(if (pet.angel) "ANGEL OFF" else "ANGEL ON") {
+                Item(if (pet.angel) "ANGELO NO" else "ANGELO SI") {
                     pet.angel = !pet.angel
                     pet.immortal = pet.angel
-                    dbg(if (pet.angel) "ANGEL" else "MORTAL")
+                    dbg(if (pet.angel) "ANGELO" else "MORTALE")
                 },
-                Item(if (dbgAnyHour) "ANY HOUR ON" else "ANY HOUR OFF") {
+                Item(if (dbgAnyHour) "ORARIO LIBERO SI" else "ORARIO LIBERO NO") {
                     dbgAnyHour = !dbgAnyHour
-                    say(if (dbgAnyHour) "PARENTS 24H" else "NORMAL HOURS")
+                    say(if (dbgAnyHour) "GENITORI 24H" else "ORARI NORMALI")
                 },
-                Item("KILL") { dbgKill() },
-                Item("REVIVE") { dbgRevive() },
-                Item("NOTIFY TEST") {
+                Item("UCCIDI") { dbgKill() },
+                Item("RIVIVI") { dbgRevive() },
+                Item("PROVA NOTIFICA") {
                     Notifier.test(ctx, pet.name)
-                    say("SENT")
+                    say("INVIATA")
                 },
-                Item("BACK", icon = 10) { open(Scr.SETTINGS) }
+                Item("INDIETRO", icon = 10) { open(Scr.SETTINGS) }
             )
 
             Scr.PARK -> listOf(
-                Item("PLAY BALL", "E-10", pet.energy >= 15f) { startAnim(A_BALL, 3000L, 0, Scr.PARK) },
-                Item("MEET", "DATE", teen) {
-                    val chance = 0.25f + pet.happy / 200f + (if (pet.pers == 0) 0.15f else 0f)
-                    dateOk = rnd.nextFloat() < chance
-                    startAnim(A_DATE, 3600L, 0, Scr.PARK)
+                Item("GIOCA A PALLA", "E-10", pet.energy >= 15f) {
+                    if (pet.active >= 97f) refuse("E' GIA' IN FORMA") else startAnim(A_BALL, 3000L, 0, Scr.PARK)
                 },
-                Item("BACK", icon = 10) { open(Scr.MAP) }
+                Item("INCONTRA", "DATE", teen) {
+                    if (pet.happy >= 97f) {
+                        refuse("E' GIA' FELICE")
+                    } else {
+                        val chance = 0.25f + pet.happy / 200f + (if (pet.pers == 0) 0.15f else 0f)
+                        dateOk = rnd.nextFloat() < chance
+                        startAnim(A_DATE, 3600L, 0, Scr.PARK)
+                    }
+                },
+                Item("INDIETRO", icon = 10) { open(Scr.MAP) }
             )
 
             Scr.SCHOOL -> listOf(
-                Item("STUDY", "E-8", pet.energy >= 15f) { startAnim(A_STUDY, 5000L, 0, Scr.SCHOOL) },
-                Item("BACK", icon = 10) { open(Scr.MAP) }
+                Item("STUDIA", "E-8", pet.energy >= 15f) {
+                    if (pet.smarts >= 97f) refuse("SA GIA' TUTTO") else startAnim(A_STUDY, 5000L, 0, Scr.SCHOOL)
+                },
+                Item("INDIETRO", icon = 10) { open(Scr.MAP) }
             )
 
             Scr.STAND -> listOf(
-                Item("WORK", "E-12", pet.energy >= 20f) { startAnim(A_WORK, 5000L, 0, Scr.STAND) },
-                Item("BACK", icon = 10) { open(Scr.MAP) }
+                Item("LAVORA", "5S E-12", pet.energy >= 20f) { startAnim(A_WORK, 5000L, 0, Scr.STAND) },
+                Item("LAVORA 10 MIN", "E-15", pet.energy >= 30f) { startWork(10) },
+                Item("LAVORA 30 MIN", "E-25", pet.energy >= 40f) { startWork(30) },
+                Item("INDIETRO", icon = 10) { open(Scr.MAP) }
             )
 
             Scr.UNDER -> listOf(
-                Item("TALK ANGEL") { startAnim(A_TALK, 2600L, 0, Scr.UNDER) },
-                Item("TALK DEMON") { startAnim(A_TALK, 2600L, 1, Scr.UNDER) },
-                Item("BE ANGEL", "30 CANDY", !pet.angel && teen && pet.candy >= 30) {
+                Item("PARLA ANGELO") {
+                    if (pet.happy >= 97f) refuse("E' GIA' FELICE") else startAnim(A_TALK, 2600L, 0, Scr.UNDER)
+                },
+                Item("PARLA DEMONE") { startAnim(A_TALK, 2600L, 1, Scr.UNDER) },
+                Item("DIVENTA ANGELO", "30 CARAM.", !pet.angel && teen && pet.candy >= 30) {
                     pet.candy -= 30
                     startAnim(A_ANGEL, 3200L, 0, Scr.UNDER)
                 },
-                Item("LEAVE", icon = 10) { open(Scr.MAP) }
+                Item("ESCI", icon = 10) { open(Scr.MAP) }
             )
 
             Scr.G_HILO -> listOf(
-                Item("LOW") { hiloInput(0) },
-                Item("HIGH") { hiloInput(2) }
+                Item("BASSO") { hiloInput(0) },
+                Item("ALTO") { hiloInput(2) }
             )
 
-            Scr.G_SWING -> listOf(Item("SWING!") { swingHit() })
+            Scr.G_SWING -> listOf(Item("COLPISCI!") { swingHit() })
 
             Scr.G_CATCH -> listOf(
-                Item("< LEFT") { bx = (bx - 12f).coerceIn(6f, 74f) },
-                Item("RIGHT >") { bx = (bx + 12f).coerceIn(6f, 74f) }
+                Item("< SINISTRA") { bx = (bx - 12f).coerceIn(6f, 74f) },
+                Item("DESTRA >") { bx = (bx + 12f).coerceIn(6f, 74f) }
             )
 
             Scr.G_END -> listOf(
@@ -387,7 +416,7 @@ class PixiGame(val ctx: Context) {
                 }
             )
 
-            Scr.DEAD -> listOf(Item("NEW EGG") { newPet() })
+            Scr.DEAD -> listOf(Item("NUOVO UOVO") { newPet() })
 
             else -> emptyList()
         }
@@ -398,14 +427,14 @@ class PixiGame(val ctx: Context) {
         if (its.isEmpty()) return
         cursor = cursor.coerceIn(0, its.size - 1)
         val item = its[cursor]
-        if (item.enabled) item.act() else say("NOT NOW")
+        if (item.enabled) item.act() else say("ORA NO")
     }
 
     private fun toggleSleep() {
         if (pet.sleeping) {
             pet.sleeping = false
-        } else if (pet.energy >= 90f) {
-            say("NOT TIRED")
+        } else if (pet.energy >= 97f) {
+            say("NON HA SONNO")
             return
         } else {
             pet.sleeping = true
@@ -499,9 +528,9 @@ class PixiGame(val ctx: Context) {
             val s = Base64.encodeToString(pet.toJson().toString().toByteArray(), Base64.NO_WRAP)
             val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             cm.setPrimaryClip(ClipData.newPlainText("PixiPet", s))
-            say("COPIED")
+            say("COPIATO")
         } catch (e: Throwable) {
-            say("ERROR")
+            say("ERRORE")
         }
     }
 
@@ -514,9 +543,9 @@ class PixiGame(val ctx: Context) {
             lastStage = pet.stage(now())
             scr = Scr.HOME
             commit()
-            say("LOADED")
+            say("CARICATO")
         } catch (e: Throwable) {
-            say("BAD CODE")
+            say("CODICE ERRATO")
         }
     }
 
@@ -576,7 +605,7 @@ class PixiGame(val ctx: Context) {
                 pet.coins += gain
                 pet.energy -= 12f
                 pet.hygiene -= 6f
-                say("+$gain COINS")
+                say("+$gain MONETE")
             }
             A_BALL -> {
                 pet.active += 12f
@@ -590,10 +619,10 @@ class PixiGame(val ctx: Context) {
                     pet.dates++
                     pet.happy += 25f
                     pet.coins += 10
-                    say(if (pet.dates == 3) "HEARTBREAKER!" else "DATE OK!")
+                    say(if (pet.dates == 3) "SPEZZACUORI!" else "DATE RIUSCITO!")
                 } else {
                     pet.happy -= 10f
-                    say("REJECTED")
+                    say("RIFIUTATO")
                 }
             }
             A_TALK -> {
@@ -608,7 +637,7 @@ class PixiGame(val ctx: Context) {
             A_ANGEL -> {
                 pet.angel = true
                 pet.immortal = true
-                say("IMMORTAL!")
+                say("IMMORTALE!")
             }
         }
         anim = null
@@ -618,11 +647,39 @@ class PixiGame(val ctx: Context) {
     }
 
     private fun finishAway() {
-        when (pet.finishAway()) {
-            1 -> say("BACK HOME")
-            2 -> say("WELCOME BACK")
+        val before = pet.coins
+        when (pet.finishAway(rnd)) {
+            1 -> say("E' TORNATO")
+            2 -> say("BENTORNATO")
+            3, 4 -> say("+${pet.coins - before} MONETE")
         }
         commit()
+    }
+
+    /** Richiamo anticipato: nessun premio. */
+    private fun callBack() {
+        if (now() < pet.awayUntil) {
+            pet.cancelAway()
+            say("RICHIAMATO")
+            commit()
+        } else {
+            finishAway()
+        }
+    }
+
+    private fun startWork(min: Int) {
+        pet.awayKind = if (min >= 30) 4 else 3
+        pet.awayUntil = now() + min * 60000L
+        scr = Scr.HOME
+        cursor = 0
+        commit()
+        say("AL LAVORO")
+    }
+
+    /** L'animaletto si rifiuta: scuote la testa e dice NO. */
+    fun refuse(msg: String) {
+        startAnim(A_REFUSE, 1500L, 0, scr)
+        say(msg)
     }
 
     // ------------------------------------------------------------------ debug
@@ -638,13 +695,13 @@ class PixiGame(val ctx: Context) {
 
     private fun dbgNextStage() {
         if (pet.dead) {
-            say("DEAD")
+            say("MORTO")
             return
         }
         val next = (pet.stage(now()).ordinal + 1) % Stage.values().size
         pet.bornAt = now() - (stageStarts[next] * 60000f).toLong() - 1000L
         if (next < Stage.TEEN.ordinal) pet.pers = -1
-        dbg("STAGE " + Stage.values()[next].label)
+        dbg("FASE " + Stage.values()[next].label)
     }
 
     /** simulate=false: cambia solo l'eta'. simulate=true: fa passare davvero il tempo (le barre calano). */
@@ -655,7 +712,7 @@ class PixiGame(val ctx: Context) {
             pet.lastTick -= ms
             if (pet.awayKind != 0) pet.awayUntil -= ms
         }
-        dbg(if (simulate) "TIME SKIPPED" else "AGE UP")
+        dbg(if (simulate) "TEMPO PASSATO" else "ETA' AUMENTATA")
     }
 
     private fun dbgFill() {
@@ -670,7 +727,7 @@ class PixiGame(val ctx: Context) {
         pet.starveMin = 0f
         pet.poops = 0
         pet.sleeping = false
-        dbg("ALL FULL")
+        dbg("TUTTO PIENO")
     }
 
     private fun dbgLow() {
@@ -678,7 +735,7 @@ class PixiGame(val ctx: Context) {
         pet.hygiene = 15f
         pet.happy = 15f
         pet.energy = 15f
-        dbg("ALL LOW")
+        dbg("TUTTO BASSO")
     }
 
     private fun dbgKill() {
@@ -703,7 +760,7 @@ class PixiGame(val ctx: Context) {
             pet.bornAt = now() - (Cfg.ADULT_MIN * 60000f).toLong()
         }
         if (scr == Scr.DEAD) scr = Scr.HOME
-        dbg("REVIVED")
+        dbg("RIVISSUTO")
     }
 
     // ----------------------------------------------------- ciclo di vita app
@@ -773,7 +830,7 @@ class PixiGame(val ctx: Context) {
             pet.energy -= 10f
             pet.hunger -= 5f
             pet.games++
-            endLines = listOf("COINS +$cScore", "CANDY +$cCandy")
+            endLines = listOf("MONETE +$cScore", "CARAM. +$cCandy")
             finishGame()
         }
     }
@@ -832,7 +889,7 @@ class PixiGame(val ctx: Context) {
                 pet.happy += 3f * sCorrect
                 pet.energy -= 8f
                 pet.games++
-                endLines = listOf("RIGHT $sCorrect/5", "COINS +${sCorrect * 4}")
+                endLines = listOf("GIUSTE $sCorrect/5", "MONETE +${sCorrect * 4}")
                 finishGame()
             }
         }
@@ -892,7 +949,7 @@ class PixiGame(val ctx: Context) {
                 pet.hunger -= 6f
                 pet.cPlay++
                 pet.games++
-                endLines = listOf("HITS $wHits/5", "COINS +${wHits * 5}")
+                endLines = listOf("COLPI $wHits/5", "MONETE +${wHits * 5}")
                 finishGame()
             }
         }
@@ -902,7 +959,7 @@ class PixiGame(val ctx: Context) {
 
     private fun onStage(st: Stage, n: Long) {
         if (st != Stage.EGG) {
-            say(if (lastStage == Stage.EGG) "HATCHED!" else "GREW UP!")
+            say(if (lastStage == Stage.EGG) "E' NATO!" else "E' CRESCIUTO!")
             beep()
         }
         lastStage = st
@@ -968,20 +1025,20 @@ class PixiGame(val ctx: Context) {
 
     fun title(): String = when (scr) {
         Scr.HOME, Scr.MENU -> "MENU"
-        Scr.FOOD -> "FEED"
-        Scr.PLAYLIST -> "PLAY"
-        Scr.MAP -> "MAP"
-        Scr.SETTINGS -> "SETUP"
+        Scr.FOOD -> "MANGIA"
+        Scr.PLAYLIST -> "GIOCA"
+        Scr.MAP -> "MAPPA"
+        Scr.SETTINGS -> "OPZIONI"
         Scr.DEBUG -> "DEBUG"
-        Scr.STATS -> "STATS"
-        Scr.PARK -> "PARK"
-        Scr.SCHOOL -> "SCHOOL"
-        Scr.STAND -> "STAND"
-        Scr.UNDER -> "UNDERWORLD"
-        Scr.G_CATCH -> "TRICK TREAT"
-        Scr.G_HILO -> "HI-LO"
-        Scr.G_SWING -> "SWING"
-        Scr.G_END -> "RESULT"
+        Scr.STATS -> "STATO"
+        Scr.PARK -> "PARCO"
+        Scr.SCHOOL -> "SCUOLA"
+        Scr.STAND -> "BANCARELLA"
+        Scr.UNDER -> "ALDILA"
+        Scr.G_CATCH -> "DOLCETTI"
+        Scr.G_HILO -> "ALTO-BASSO"
+        Scr.G_SWING -> "BATTUTA"
+        Scr.G_END -> "RISULTATO"
         Scr.DEAD -> "R.I.P."
         Scr.ANIM -> "..."
     }

@@ -16,11 +16,12 @@ fun PixiGame.render(now: Long) {
     f.clear(PANEL)
     when (scr) {
         Scr.HOME, Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.DEBUG, Scr.STATS -> {
-            drawRoom(f, now, isNight())
+            drawRoom(f, now, isNight() || pet.sleeping)
             drawHomeScene(now)
             drawHud(now)
             if (pet.sleeping) {
                 f.shade(0.5f, col(0x0B0B2A))
+                drawWindowSky(f, true, now)
                 drawIcon(f, 11, petX.toInt() + 8, 14 + ((now / 500L) % 2L).toInt() * 2)
             }
         }
@@ -251,11 +252,18 @@ private fun PixiGame.drawHomeScene(now: Long) {
     for (i in 0 until pet.poops.coerceAtMost(4)) drawPoop(f, spots[i].first, spots[i].second)
 
     if (away()) {
-        f.rect(16, 20, 48, 30, col(0x9B6A3C))
-        f.rect(18, 22, 44, 26, col(0xE9D3A4))
-        f.textC("AWAY", 25, col(0x6B4423), 2)
+        f.rect(6, 20, 68, 32, col(0x9B6A3C))
+        f.rect(8, 22, 64, 28, col(0xE9D3A4))
+        val what = when (pet.awayKind) {
+            1 -> "DAI GENITORI"
+            2 -> "IN VACANZA"
+            else -> "AL LAVORO"
+        }
+        f.textC(what, 26, col(0x6B4423))
         val m = ((pet.awayUntil - now) / 60000L).coerceAtLeast(0L)
-        f.textC("BACK IN ${m / 60}H${m % 60}M", 39, col(0x6B4423))
+        val left = if (m >= 60L) "${m / 60}H${m % 60}M" else "${m}M"
+        f.textC("TORNA TRA", 34, col(0x6B4423))
+        f.textC(left, 41, col(0x8A3B2B))
         return
     }
 
@@ -313,10 +321,10 @@ private fun PixiGame.drawLocation(now: Long) {
     }
     drawPetActor(now, 40, gy, moodNow(), false)
     val label = when (scr) {
-        Scr.PARK -> "PARK"
-        Scr.SCHOOL -> "SCHOOL"
-        Scr.STAND -> "STAND"
-        else -> "UNDERWORLD"
+        Scr.PARK -> "PARCO"
+        Scr.SCHOOL -> "SCUOLA"
+        Scr.STAND -> "BANCARELLA"
+        else -> "ALDILA"
     }
     f.textO(label, 3, 2, WHITE)
     f.textR("${pet.coins}", W - 10, 2, WHITE)
@@ -359,6 +367,13 @@ private fun PixiGame.drawAnim(now: Long) {
             }
             for (i in 0 until 6) f.rect(x0 - 14 + i * 5, 0, 1, 10 + ((t + i * 3) % 6).toInt(), col(0x5AB8FF))
         }
+        A_REFUSE -> {
+            val shake = (sin(now / 60.0) * 3).toInt()
+            drawPetActor(now, x0 + shake, gy, M_SAD, shake > 0)
+            f.rect(x0 - 10, 12, 22, 11, WHITE)
+            f.frame(x0 - 10, 12, 22, 11, col(0x333333))
+            f.textC("NO!", 15, col(0xE23B3B), 1, x0 + 1)
+        }
         A_CLEAN -> {
             drawPetActor(now, x0, gy, M_HAPPY, false)
             val bx2 = 14 + (((now / 140L) % 6L).toInt()) * 8
@@ -389,7 +404,7 @@ private fun PixiGame.drawAnim(now: Long) {
         A_WORK -> {
             drawPetActor(now, x0, gy, M_HAPPY, false)
             for (i in 0 until 3) drawCoin(f, 20 + i * 20, 40 - ((t + i * 7) % 20).toInt())
-            f.textO("WORK!", 3, 2, WHITE)
+            f.textO("LAVORO!", 3, 2, WHITE)
         }
         A_BALL -> {
             drawPetActor(now, x0, gy, M_HAPPY, false)
@@ -465,7 +480,7 @@ private fun PixiGame.drawCatch(now: Long) {
     f.rect(bxi - 8, 68, 16, 8, col(0xB07E48))
     f.rect(bxi - 9, 67, 18, 2, col(0x8A5A2B))
     f.rect(bxi - 6, 71, 12, 1, col(0x8A5A2B))
-    f.textO("SCORE ${cScore}", 3, 2, WHITE)
+    f.textO("PUNTI ${cScore}", 3, 2, WHITE)
     for (i in 0 until cLives) drawHeart(f, W - 8 - i * 7, 2)
     val left = ((cEnd - now) / 1000L).coerceAtLeast(0L)
     f.textO("${left}S", 3, 10, WHITE)
@@ -474,22 +489,22 @@ private fun PixiGame.drawCatch(now: Long) {
 private fun PixiGame.drawHilo(now: Long) {
     val f = fb
     f.grad(0, H, col(0x4B3A8A), col(0x241C3D))
-    drawTopBar("HI-LO ${sRound}/5")
-    f.textC("LEFT=LOW  RIGHT=HIGH", 14, GRAY)
+    drawTopBar("TURNO ${sRound}/5")
+    f.textC("SX=BASSO  DX=ALTO", 14, GRAY)
     when (sPhase) {
         0 -> {
             val n = sNum.toString()
             f.textC(n, 28, WHITE, 5)
-            f.text("<LOW", 4, 66, col(0x9BF0B0))
-            f.textR("HIGH>", W - 4, 66, col(0xFFC2DB))
+            f.text("<BASSO", 4, 66, col(0x9BF0B0))
+            f.textR("ALTO>", W - 4, 66, col(0xFFC2DB))
         }
         1, 2 -> {
             val n = sNext.toString()
             f.textC(n, 28, if (sPhase == 1) col(0x9BF0B0) else col(0xFF8A8A), 5)
-            f.textC(if (sPhase == 1) "RIGHT!" else "WRONG", 62, WHITE)
+            f.textC(if (sPhase == 1) "GIUSTO!" else "ERRATO", 62, WHITE)
         }
         else -> {
-            f.textC("SCORE", 22, PINK)
+            f.textC("PUNTI", 22, PINK)
             f.textC("$sCorrect/5", 34, WHITE, 3)
         }
     }
@@ -517,19 +532,19 @@ private fun PixiGame.drawSwing(now: Long) {
         1 -> {
             val t = (now - wT0) / 1000f
             f.ellipse(52 + (t * 40f).toInt(), 58 - (t * 40f).toInt(), 2, 2, WHITE)
-            f.textO("HIT!", 34, 30, WHITE)
+            f.textO("COLPITO!", 34, 30, WHITE)
         }
-        2 -> f.textO("MISS", 34, 30, WHITE)
-        else -> f.textC(if (wHits >= 3) "WIN" else "LOSE", 28, WHITE, 3)
+        2 -> f.textO("MANCATO", 34, 30, WHITE)
+        else -> f.textC(if (wHits >= 3) "VINTO" else "PERSO", 28, WHITE, 3)
     }
-    f.textO("ROUND ${wRound}/5  HITS $wHits", 3, 2, WHITE)
-    f.textC("PRESS OK / TAP", 76, WHITE)
+    f.textO("TURNO ${wRound}/5  COLPI $wHits", 3, 2, WHITE)
+    f.textC("PREMI OK / TOCCA", 76, WHITE)
 }
 
 private fun PixiGame.drawEnd(now: Long) {
     val f = fb
     f.grad(0, H, col(0x4B3A8A), col(0x241C3D))
-    drawTopBar("RESULT")
+    drawTopBar("RISULTATO")
     for (i in endLines.indices) f.textC(endLines[i], 24 + i * 12, WHITE, 1)
     if ((now / 500L) % 2L == 0L) f.textC("OK", 62, YELLOW)
 }
@@ -549,5 +564,5 @@ private fun PixiGame.drawDead(now: Long) {
     val sp = if (pet.pers >= 0) pet.pers else 0
     val ghost = makePet(st, sp, pet.hue, M_SICK, false, false, 1, true)
     f.blit(ghost, 18, 2 + ((sin(now / 400.0) * 2).toInt()))
-    if ((now / 500L) % 2L == 0L) f.textC("OK: NEW EGG", 3, YELLOW)
+    if ((now / 500L) % 2L == 0L) f.textC("OK: NUOVO UOVO", 3, YELLOW)
 }

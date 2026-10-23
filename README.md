@@ -31,3 +31,9 @@ Le notifiche si attivano/disattivano da SETUP, al primo avvio Android chiede il 
 SETUP -> DEBUG: cambia stadio/eta', fa passare il tempo (SKIP), aggiunge monete e caramelle,
 riempie o svuota le barre, malattia, cacche, personalita', angelo/immortale, orario genitori libero,
 uccide/resuscita e invia una notifica di prova.
+
+## Novita' (ultima versione)
+- Gioco interamente in italiano.
+- Quando l'animaletto dorme, la finestra mostra la notte con luna e stelle che brillano.
+- Se una statistica e' al 97% o piu', l'animaletto rifiuta di ripetere quell'azione (scuote la testa e dice NO).
+- Bancarella: LAVORA (5 secondi), LAVORA 10 MIN (guadagna di piu') e LAVORA 30 MIN (guadagna ancora di piu'). Durante il lavoro l'animaletto e' via; con RICHIAMA prima del tempo non si riceve nulla.

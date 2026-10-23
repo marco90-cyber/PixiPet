@@ -418,21 +418,7 @@ fun drawRoom(f: Fb, now: Long, night: Boolean) {
     }
     // finestra
     f.rect(50, 8, 24, 24, col(0x9B6A3C))
-    f.rect(52, 10, 20, 20, if (night) col(0x1B2A4D) else col(0x9AD7FF))
-    if (night) {
-        f.ellipse(64, 17, 3, 3, col(0xFFF3B0))
-        f.ellipse(65, 16, 2, 2, col(0x1B2A4D))
-        f.set(56, 14, WHITE)
-        f.set(60, 24, WHITE)
-        f.set(68, 26, WHITE)
-        f.set(55, 22, col(0xFFF3B0))
-    } else {
-        f.ellipse(66, 16, 3, 3, YELLOW)
-        f.ellipse(58, 24, 4, 2, WHITE)
-        f.ellipse(62, 25, 3, 2, WHITE)
-    }
-    f.rect(61, 10, 2, 20, col(0x9B6A3C))
-    f.rect(52, 19, 20, 2, col(0x9B6A3C))
+    drawWindowSky(f, night, now)
     f.rect(48, 6, 28, 3, col(0x7A4F28))
     f.rect(48, 6, 5, 26, col(0xE56B8A))
     f.rect(71, 6, 5, 26, col(0xE56B8A))
@@ -544,4 +530,41 @@ fun drawUnder(f: Fb, now: Long) {
     f.ellipse(66, 12, 5, 5, col(0xFFE9A8))
     f.ellipse(68, 11, 4, 4, col(0x3A1A4D))
     for (i in 0 until 8) f.set(4 + i * 10, 4 + (i * 7) % 20, col(0xFFE9A8))
+}
+
+/** Vetro della finestra con cielo di giorno (sole, nuvole) o di notte (luna e stelle che brillano). */
+fun drawWindowSky(f: Fb, night: Boolean, now: Long) {
+    if (night) {
+        val sky = col(0x15204A)
+        f.rect(52, 10, 20, 20, sky)
+        f.rect(52, 24, 20, 6, col(0x1B2A5A))
+        // luna crescente
+        f.ellipse(67, 14, 3, 3, col(0xFFF3B0))
+        f.ellipse(68, 13, 3, 3, sky)
+        // stelle
+        val tw = (now / 450L) % 2L == 0L
+        val stars = arrayOf(
+            intArrayOf(54, 12), intArrayOf(58, 16), intArrayOf(56, 25), intArrayOf(59, 28),
+            intArrayOf(65, 24), intArrayOf(69, 27), intArrayOf(67, 22), intArrayOf(53, 28),
+            intArrayOf(63, 12), intArrayOf(70, 11)
+        )
+        for (i in stars.indices) {
+            val bright = (i % 2 == 0) == tw
+            val c = if (bright) WHITE else col(0xFFF3B0)
+            f.set(stars[i][0], stars[i][1], c)
+            if (bright && i % 3 == 0) {
+                f.set(stars[i][0] - 1, stars[i][1], col(0x8FA3E0))
+                f.set(stars[i][0] + 1, stars[i][1], col(0x8FA3E0))
+                f.set(stars[i][0], stars[i][1] - 1, col(0x8FA3E0))
+                f.set(stars[i][0], stars[i][1] + 1, col(0x8FA3E0))
+            }
+        }
+    } else {
+        f.rect(52, 10, 20, 20, col(0x9AD7FF))
+        f.ellipse(66, 16, 3, 3, YELLOW)
+        f.ellipse(58, 24, 4, 2, WHITE)
+        f.ellipse(62, 25, 3, 2, WHITE)
+    }
+    f.rect(61, 10, 2, 20, col(0x9B6A3C))
+    f.rect(52, 19, 20, 2, col(0x9B6A3C))
 }
