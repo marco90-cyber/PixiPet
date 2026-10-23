@@ -34,6 +34,7 @@ uccide/resuscita e invia una notifica di prova.
 
 ## Novita' (ultima versione)
 - Gioco interamente in italiano.
+- Nome scelto al primo avvio (e a ogni nuovo uovo), non modificabile; in DEBUG c è MODIFICA NOME. Statistiche sotto il menu; debug con voci + e -.
 - Quando l'animaletto dorme, la finestra mostra la notte con luna e stelle che brillano.
 - Se una statistica e' al 97% o piu', l'animaletto rifiuta di ripetere quell'azione (scuote la testa e dice NO).
 - Bancarella: LAVORA (5 secondi), LAVORA 10 MIN (guadagna di piu') e LAVORA 30 MIN (guadagna ancora di piu'). Durante il lavoro l'animaletto e' via; con RICHIAMA prima del tempo non si riceve nulla.

@@ -4,7 +4,7 @@ import org.json.JSONObject
 import kotlin.random.Random
 
 enum class Stage(val label: String) {
-    EGG("UOVO"), BABY("NEONATO"), CHILD("BAMBINO"), TEEN("ADOLESC."), ADULT("ADULTO"), ELDER("ANZIANO")
+    EGG("UOVO"), BABY("NEONATO"), CHILD("BAMBINO"), TEEN("ADOLESCENTE"), ADULT("ADULTO"), ELDER("ANZIANO")
 }
 
 fun Stage.atLeast(o: Stage) = ordinal >= o.ordinal
@@ -68,6 +68,7 @@ class Pet(var bornAt: Long) {
     var awayKind = 0
     var dates = 0
     var games = 0
+    var named = true
 
     fun ageMin(now: Long): Float {
         val end = if (dead) diedAt else now
@@ -248,7 +249,7 @@ class Pet(var bornAt: Long) {
         put("gen", generation); put("coins", coins); put("candy", candy); put("pers", pers)
         put("cFood", cFood); put("cStudy", cStudy); put("cPlay", cPlay); put("cPet", cPet)
         put("immortal", immortal); put("angel", angel); put("awayUntil", awayUntil); put("awayKind", awayKind)
-        put("dates", dates); put("games", games)
+        put("dates", dates); put("games", games); put("named", named)
     }
 
     companion object {
@@ -288,6 +289,7 @@ class Pet(var bornAt: Long) {
             p.awayKind = j.optInt("awayKind", 0)
             p.dates = j.optInt("dates", 0)
             p.games = j.optInt("games", 0)
+            p.named = j.optBoolean("named", true)
             return p
         }
     }

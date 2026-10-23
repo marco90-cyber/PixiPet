@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -121,6 +122,31 @@ fun PixiPetApp(game: PixiGame) {
                 PortraitLayout(game, maxWidth, maxHeight, shell, light, dark)
             }
         }
+    }
+
+    if (game.askName) {
+        var nm by remember { mutableStateOf(NAMES.random()) }
+        AlertDialog(
+            onDismissRequest = {},
+            confirmButton = {
+                TextButton(
+                    enabled = nm.any { it.isLetterOrDigit() },
+                    onClick = { game.setFirstName(nm) }
+                ) { Text("OK") }
+            },
+            title = { Text("Come si chiama il tuo pet?") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = nm,
+                        onValueChange = { nm = it.take(8).uppercase() },
+                        singleLine = true
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text("Il nome non potrà più essere cambiato.")
+                }
+            }
+        )
     }
 
     if (game.showRename) {
@@ -346,6 +372,11 @@ private fun ItemsGrid(
             itemsIndexed(items) { i, item ->
                 ItemCard(item, i == cursor, homeLike) { game.pick(i) }
             }
+            if (scr == Scr.HOME || scr == Scr.MENU) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Column(Modifier.padding(top = 10.dp, bottom = 14.dp)) { StatsBlock(game) }
+                }
+            }
         }
     }
 }
@@ -427,20 +458,25 @@ private fun PixelIcon(id: Int, food: Int, dp: Dp) {
 
 @Composable
 private fun StatsView(game: PixiGame, @Suppress("UNUSED_PARAMETER") rev: Int, modifier: Modifier) {
+    Column(modifier.verticalScroll(rememberScrollState())) { StatsBlock(game) }
+}
+
+@Composable
+private fun StatsBlock(game: PixiGame) {
     val pet = game.pet
     val now = System.currentTimeMillis()
     val trait = if (pet.immortal) "IMMORTALE" else if (pet.angel) "ANGELO" else "-"
-    Column(modifier.verticalScroll(rememberScrollState())) {
+    Column {
         StatBar("FAME", pet.hunger)
         StatBar("PULIZIA", pet.hygiene)
-        StatBar("FELICITA'", pet.happy)
+        StatBar("FELICITÀ", pet.happy)
         StatBar("ENERGIA", pet.energy)
         StatBar("MENTE", pet.smarts)
         StatBar("FORMA", pet.active)
         Spacer(Modifier.height(10.dp))
         InfoRow("NOME", pet.name)
         InfoRow("FASE", pet.stage(now).label)
-        InfoRow("ETA'", ageText(pet.ageMin(now)))
+        InfoRow("ETÀ", ageText(pet.ageMin(now)))
         InfoRow("CARATTERE", if (pet.pers >= 0) PERS[pet.pers] else "?")
         InfoRow("PESO", "${pet.weight}")
         InfoRow("MONETE", "${pet.coins}")
@@ -448,7 +484,7 @@ private fun StatsView(game: PixiGame, @Suppress("UNUSED_PARAMETER") rev: Int, mo
         InfoRow("APPUNTAMENTI", "${pet.dates}")
         InfoRow("PARTITE", "${pet.games}")
         InfoRow("GENERAZIONE", "${pet.generation}")
-        InfoRow("DONO", trait)
+        InfoRow("SPECIALE", trait)
     }
 }
 

@@ -63,6 +63,7 @@ class PixiGame(val ctx: Context) {
 
     var image by mutableStateOf<ImageBitmap?>(null)
     var showRename by mutableStateOf(false)
+    var askName by mutableStateOf(false)
     var shellIdx by mutableStateOf(prefs.getInt("shell", 0))
     var showShell by mutableStateOf(prefs.getBoolean("showShell", true))
     var sound = prefs.getBoolean("sound", true)
@@ -122,6 +123,7 @@ class PixiGame(val ctx: Context) {
     var wLast = 0L
 
     init {
+        askName = !pet.named
         save()
     }
 
@@ -140,6 +142,7 @@ class PixiGame(val ctx: Context) {
         p.name = NAMES.random(rnd)
         p.hue = rnd.nextInt(5)
         p.generation = gen
+        p.named = false
         return p
     }
 
@@ -208,7 +211,6 @@ class PixiGame(val ctx: Context) {
                 },
                 Item("GIOCA", enabled = free && child, icon = 4) { open(Scr.PLAYLIST) },
                 Item("MAPPA", enabled = !egg && !asleep, icon = 5) { open(Scr.MAP) },
-                Item("STATO", icon = 6) { open(Scr.STATS) },
                 Item(if (asleep) "SVEGLIA" else "DORMI", enabled = !egg && !gone, icon = 11) { toggleSleep() },
                 Item("CURA", enabled = free && pet.sick, icon = 8) {
                     if (pet.coins >= 10) pet.coins -= 10
@@ -266,7 +268,7 @@ class PixiGame(val ctx: Context) {
                         say("CIAO CIAO")
                     }
                 },
-                Item("ALDILA", "10 CARAM.", !gone && teen && pet.candy >= 10) {
+                Item("ALDILÀ", "10 CARAM.", !gone && teen && pet.candy >= 10) {
                     pet.candy -= 10
                     commit()
                     open(Scr.UNDER)
@@ -283,25 +285,24 @@ class PixiGame(val ctx: Context) {
             )
 
             Scr.SETTINGS -> listOf(
-                Item(if (sound) "SUONO SI" else "SUONO NO") {
+                Item(if (sound) "SUONO: SÌ" else "SUONO: NO") {
                     sound = !sound
                     prefs.edit().putBoolean("sound", sound).apply()
                 },
-                Item(if (prefs.getBoolean("notify", true)) "NOTIFICHE SI" else "NOTIFICHE NO") {
+                Item(if (prefs.getBoolean("notify", true)) "NOTIFICHE: SÌ" else "NOTIFICHE: NO") {
                     prefs.edit().putBoolean("notify", !prefs.getBoolean("notify", true)).apply()
                 },
                 Item("COLORE GUSCIO") {
                     shellIdx = (shellIdx + 1) % SHELLS.size
                     prefs.edit().putInt("shell", shellIdx).apply()
                 },
-                Item(if (showShell) "GUSCIO SI" else "GUSCIO NO") {
+                Item(if (showShell) "GUSCIO: SÌ" else "GUSCIO: NO") {
                     showShell = !showShell
                     prefs.edit().putBoolean("showShell", showShell).apply()
                 },
-                Item("RINOMINA") { showRename = true },
                 Item("ESPORTA DATI") { exportSave() },
                 Item("IMPORTA DATI") { importSave() },
-                Item(if (confirmReset) "SICURO? OK=NUOVO" else "NUOVO UOVO") {
+                Item(if (confirmReset) "SICURO? TOCCA ANCORA" else "NUOVO UOVO") {
                     if (confirmReset) newPet() else confirmReset = true
                 },
                 Item("DEBUG") { open(Scr.DEBUG) },
@@ -309,15 +310,28 @@ class PixiGame(val ctx: Context) {
             )
 
             Scr.DEBUG -> listOf(
+                Item("MODIFICA NOME") { showRename = true },
                 Item("FASE SUCCESSIVA") { dbgNextStage() },
-                Item("ETA' +1 ORA") { dbgShift(60, false) },
-                Item("ETA' +1 GIORNO") { dbgShift(1440, false) },
+                Item("ETÀ +1 ORA") { dbgShift(60, false) },
+                Item("ETÀ +1 GIORNO") { dbgShift(1440, false) },
+                Item("ETÀ -1 ORA") { dbgShift(-60, false) },
+                Item("ETÀ -1 GIORNO") { dbgShift(-1440, false) },
                 Item("SALTA +1 ORA") { dbgShift(60, true) },
                 Item("SALTA +1 GIORNO") { dbgShift(1440, true) },
                 Item("MONETE +100") {
                     pet.coins += 100
                     dbg("+100 MONETE")
                 },
+                Item("MONETE -100") {
+                    pet.coins -= 100
+                    dbg("-100 MONETE")
+                },
+                Item("CARAMELLE -10") {
+                    pet.candy -= 10
+                    dbg("-10 CARAMELLE")
+                },
+                Item("STATISTICHE +20") { dbgStats(20f) },
+                Item("STATISTICHE -20") { dbgStats(-20f) },
                 Item("CARAMELLE +10") {
                     pet.candy += 10
                     dbg("+10 CARAMELLE")
@@ -337,12 +351,12 @@ class PixiGame(val ctx: Context) {
                     pet.pers = (pet.pers + 1) % 5
                     dbg(PERS[pet.pers])
                 },
-                Item(if (pet.angel) "ANGELO NO" else "ANGELO SI") {
+                Item(if (pet.angel) "ANGELO: NO" else "ANGELO: SÌ") {
                     pet.angel = !pet.angel
                     pet.immortal = pet.angel
                     dbg(if (pet.angel) "ANGELO" else "MORTALE")
                 },
-                Item(if (dbgAnyHour) "ORARIO LIBERO SI" else "ORARIO LIBERO NO") {
+                Item(if (dbgAnyHour) "ORARIO LIBERO: SÌ" else "ORARIO LIBERO: NO") {
                     dbgAnyHour = !dbgAnyHour
                     say(if (dbgAnyHour) "GENITORI 24H" else "ORARI NORMALI")
                 },
@@ -517,6 +531,18 @@ class PixiGame(val ctx: Context) {
 
     // ------------------------------------------------------------ rinomina/salva
 
+    /** Primo nome del pet: dopo la scelta parte la vita dell'uovo. */
+    fun setFirstName(t: String) {
+        val clean = t.trim().uppercase().filter { it.isLetterOrDigit() }.take(8)
+        if (clean.isEmpty()) return
+        pet.name = clean
+        pet.named = true
+        pet.bornAt = now()
+        pet.lastTick = pet.bornAt
+        askName = false
+        commit()
+    }
+
     fun rename(t: String) {
         val clean = t.trim().uppercase().filter { it.isLetterOrDigit() }.take(8)
         if (clean.isNotEmpty()) pet.name = clean
@@ -557,6 +583,7 @@ class PixiGame(val ctx: Context) {
         anim = null
         lastStage = Stage.EGG
         petX = 40f
+        askName = true
         commit()
     }
 
@@ -712,7 +739,17 @@ class PixiGame(val ctx: Context) {
             pet.lastTick -= ms
             if (pet.awayKind != 0) pet.awayUntil -= ms
         }
-        dbg(if (simulate) "TEMPO PASSATO" else "ETA' AUMENTATA")
+        dbg(if (simulate) "TEMPO PASSATO" else "ETA' MODIFICATA")
+    }
+
+    private fun dbgStats(d: Float) {
+        pet.hunger += d
+        pet.hygiene += d
+        pet.happy += d
+        pet.energy += d
+        pet.smarts += d
+        pet.active += d
+        dbg(if (d > 0) "STAT. +20" else "STAT. -20")
     }
 
     private fun dbgFill() {
@@ -1034,7 +1071,7 @@ class PixiGame(val ctx: Context) {
         Scr.PARK -> "PARCO"
         Scr.SCHOOL -> "SCUOLA"
         Scr.STAND -> "BANCARELLA"
-        Scr.UNDER -> "ALDILA"
+        Scr.UNDER -> "ALDILÀ"
         Scr.G_CATCH -> "DOLCETTI"
         Scr.G_HILO -> "ALTO-BASSO"
         Scr.G_SWING -> "BATTUTA"
