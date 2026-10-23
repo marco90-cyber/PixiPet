@@ -1,12 +1,6 @@
 package com.marco.pixipet
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.content.SharedPreferences
-import android.media.AudioManager
-import android.media.ToneGenerator
-import android.util.Base64
+import java.util.Base64
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -55,8 +49,8 @@ class Hit(val x: Int, val y: Int, val w: Int, val h: Int, val idx: Int)
 class Drop(var x: Float, var y: Float, val type: Int, val vy: Float)
 class Anim(val kind: Int, val t0: Long, val dur: Long, val arg: Int, val back: Scr)
 
-class PixiGame(val ctx: Context) {
-    val prefs: SharedPreferences = ctx.getSharedPreferences("pixipet2", Context.MODE_PRIVATE)
+class PixiGame {
+    val prefs: Prefs = Platform.host.prefs("pixipet2")
     val rnd = Random(System.nanoTime())
     val fb = Fb(W, H)
     val hits = ArrayList<Hit>()
@@ -71,12 +65,6 @@ class PixiGame(val ctx: Context) {
     var showShell by mutableStateOf(prefs.getBoolean("showShell", true))
     var sound = prefs.getBoolean("sound", true)
     var dbgAnyHour = false
-
-    private val tone: ToneGenerator? = try {
-        ToneGenerator(AudioManager.STREAM_MUSIC, 35)
-    } catch (e: Throwable) {
-        null
-    }
 
     var pet: Pet = loadPet()
     var scr by mutableStateOf(Scr.HOME)
@@ -198,7 +186,7 @@ class PixiGame(val ctx: Context) {
     fun beep() {
         if (!sound) return
         try {
-            tone?.startTone(ToneGenerator.TONE_PROP_BEEP, 40)
+            Platform.host.beep()
         } catch (e: Throwable) {
         }
     }
@@ -325,8 +313,20 @@ class PixiGame(val ctx: Context) {
                     sound = !sound
                     prefs.edit().putBoolean("sound", sound).apply()
                 },
-                Item(if (prefs.getBoolean("notify", true)) "NOTIFICHE: SÌ" else "NOTIFICHE: NO") {
-                    prefs.edit().putBoolean("notify", !prefs.getBoolean("notify", true)).apply()
+                *(if (Platform.host.supportsNotifications) arrayOf(
+                    Item(if (prefs.getBoolean("notify", true)) "NOTIFICHE: SÌ" else "NOTIFICHE: NO") {
+                        prefs.edit().putBoolean("notify", !prefs.getBoolean("notify", true)).apply()
+                    }
+                ) else arrayOf<Item>()),
+                Item(
+                    when (updState) {
+                        1 -> "CONTROLLO IN CORSO..."
+                        3 -> "SCARICA $updTag"
+                        else -> "CONTROLLA AGGIORNAMENTI"
+                    },
+                    "v$APP_VERSION"
+                ) {
+                    if (updState == 3) Platform.host.openUrl(updUrl) else checkUpdate()
                 },
                 Item("COLORE GUSCIO") {
                     shellIdx = (shellIdx + 1) % SHELLS.size
@@ -399,10 +399,12 @@ class PixiGame(val ctx: Context) {
                 },
                 Item("UCCIDI") { dbgKill() },
                 Item("RIVIVI") { dbgRevive() },
-                Item("PROVA NOTIFICA") {
-                    Notifier.test(ctx, pet.name)
-                    say("INVIATA")
-                },
+                *(if (Platform.host.supportsNotifications) arrayOf(
+                    Item("PROVA NOTIFICA") {
+                        Platform.host.notifyTest(pet.name)
+                        say("INVIATA")
+                    }
+                ) else arrayOf<Item>()),
                 Item("INDIETRO", icon = 10) { open(Scr.SETTINGS) }
             )
 
@@ -618,6 +620,54 @@ class PixiGame(val ctx: Context) {
         commit()
     }
 
+    // ------------------------------------------------------------ aggiornamenti
+
+    var updState by mutableIntStateOf(0) // 0 niente, 1 controllo, 2 aggiornato, 3 disponibile, 4 errore
+    var updUrl = ""
+    var updTag = ""
+
+    private fun isNewer(tag: String, cur: String): Boolean {
+        val a = tag.trim().removePrefix("v").split(".").map { it.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 }
+        val b = cur.split(".").map { it.toIntOrNull() ?: 0 }
+        for (i in 0 until maxOf(a.size, b.size)) {
+            val x = a.getOrElse(i) { 0 }
+            val y = b.getOrElse(i) { 0 }
+            if (x != y) return x > y
+        }
+        return false
+    }
+
+    fun checkUpdate() {
+        if (updState == 1) return
+        updState = 1
+        say("CONTROLLO...")
+        Thread {
+            var res = 4
+            try {
+                val body = Platform.host.httpGet("https://api.github.com/repos/$REPO/releases/latest")
+                if (body != null) {
+                    val j = JSONObject(body)
+                    val tag = j.optString("tag_name", "")
+                    if (tag.isNotEmpty()) {
+                        updTag = tag
+                        updUrl = j.optString("html_url", "https://github.com/$REPO/releases")
+                        res = if (isNewer(tag, APP_VERSION)) 3 else 2
+                    }
+                }
+            } catch (e: Throwable) {
+            }
+            updState = res
+            say(
+                when (res) {
+                    3 -> "NUOVA VERSIONE"
+                    2 -> "SEI AGGIORNATO"
+                    else -> "NESSUNA RETE"
+                }
+            )
+            uiRev++
+        }.start()
+    }
+
     fun nameKey(c: Char) {
         if (nameBuf.length < 8) nameBuf += c
         beep()
@@ -675,9 +725,8 @@ class PixiGame(val ctx: Context) {
 
     private fun exportSave() {
         try {
-            val s = Base64.encodeToString(pet.toJson().toString().toByteArray(), Base64.NO_WRAP)
-            val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            cm.setPrimaryClip(ClipData.newPlainText("PixiPet", s))
+            val s = Base64.getEncoder().encodeToString(pet.toJson().toString().toByteArray())
+            Platform.host.copyText(s)
             say("COPIATO")
         } catch (e: Throwable) {
             say("ERRORE")
@@ -686,9 +735,8 @@ class PixiGame(val ctx: Context) {
 
     private fun importSave() {
         try {
-            val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            val t = cm.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
-            val j = JSONObject(String(Base64.decode(t.trim(), Base64.DEFAULT)))
+            val t = Platform.host.pasteText()
+            val j = JSONObject(String(Base64.getMimeDecoder().decode(t.trim())))
             pet = Pet.fromJson(j)
             lastStage = pet.stage(now())
             scr = Scr.HOME
@@ -947,13 +995,12 @@ class PixiGame(val ctx: Context) {
     fun onResume() {
         pet = loadPet()
         lastStage = pet.stage(now())
-        Notifier.check(ctx, pet, now(), false)
+        Platform.host.onResume(pet, now())
     }
 
     fun onPause() {
         save()
-        Notifier.onLeave(ctx, pet, now())
-        Notifier.schedule(ctx, Notifier.nextDelayMs(pet, now()))
+        Platform.host.onPause(pet, now())
     }
 
     // ------------------------------------------------------------- minigioco 1
@@ -1398,14 +1445,16 @@ val INFO_LINES = listOf(
     "NOTIFICHE: ti avvisano se ha fame, è sporco, malato, dorme o torna a casa.",
     "NOME: si sceglie all'inizio e non si può più cambiare.",
     "CONTROLLI: tocca lo schermo per le coccole, usa i tasti o il menu per il resto. Il tasto centrale conferma.",
-    "APP: PIXIPET versione 1.0, un gioco di animaletto virtuale per Android.",
+    "APP: PIXIPET versione $APP_VERSION, un gioco di animaletto virtuale per Android e Windows.",
     "AUTORE: ideato da Marco e realizzato insieme a Claude (Anthropic).",
     "GRAFICA: tutti i personaggi, le stanze e le icone sono disegnati a pixel dentro il gioco.",
-    "DATI: il salvataggio resta solo sul tuo telefono. Non servono account né internet.",
+    "DATI: il salvataggio resta solo sul tuo dispositivo. Non servono account. Internet serve solo per controllare gli aggiornamenti.",
     "TRASFERIMENTO: ESPORTA DATI copia il salvataggio, IMPORTA DATI lo ripristina su un altro telefono.",
-    "PERMESSI: serve solo quello per le notifiche, che puoi spegnere dalle opzioni.",
+    "PERMESSI: su Android serve solo quello per le notifiche, che puoi spegnere dalle opzioni.",
+    "AGGIORNAMENTI: in OPZIONI usa CONTROLLA AGGIORNAMENTI: se c'è una nuova versione ti porta alla pagina per scaricarla.",
+    "WINDOWS: la versione portable non si installa, basta aprire PixiPet.exe. Esc torna indietro, frecce e Invio sono i tre tasti.",
     "ISPIRAZIONE: i classici animaletti virtuali da tenere in tasca.",
-    "VERSIONE 1.0 - creato con Claude"
+    "VERSIONE $APP_VERSION - creato con Claude"
 )
 
 val EGG_COLORS = arrayOf("ROSA", "BLU", "ARANCIO", "VERDE", "VIOLA")

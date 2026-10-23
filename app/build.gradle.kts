@@ -11,13 +11,32 @@ android {
         applicationId = "com.marco.pixipet"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        val ver = Regex("APP_VERSION = \"([0-9.]+)\"")
+            .find(file("../shared/src/main/kotlin/com/marco/pixipet/Version.kt").readText())!!.groupValues[1]
+        val p = ver.split(".").map { it.toInt() }
+        versionCode = p[0] * 10000 + p[1] * 100 + p[2]
+        versionName = ver
+    }
+
+    signingConfigs {
+        create("pixipet") {
+            storeFile = file("pixipet-release.jks")
+            storePassword = "pixipet-release"
+            keyAlias = "pixipet"
+            keyPassword = "pixipet-release"
+        }
+    }
+
+    sourceSets {
+        getByName("main") {
+            java.srcDir("../shared/src/main/kotlin")
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("pixipet")
         }
     }
 

@@ -1,7 +1,5 @@
 package com.marco.pixipet
 
-import android.graphics.Bitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import kotlin.math.abs
 import kotlin.math.sin
 
@@ -45,7 +43,7 @@ fun PixiGame.render(now: Long) {
         f.frame(x, 12, w2, 9, PINK)
         f.textC(toast, 14, WHITE)
     }
-    image = Bitmap.createBitmap(f.px, W, H, Bitmap.Config.ARGB_8888).asImageBitmap()
+    image = Platform.host.toImage(f.px, W, H)
 }
 
 // ------------------------------------------------------------------ comuni

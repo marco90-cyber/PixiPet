@@ -25,7 +25,8 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
         )
-        game = PixiGame(applicationContext)
+        Platform.host = AndroidHost(applicationContext)
+        game = PixiGame()
         setContent { PixiPetApp(game) }
 
         Notifier.ensureChannel(this)

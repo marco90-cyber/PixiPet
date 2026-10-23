@@ -14,3 +14,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "PixiPet"
 include(":app")
+include(":desktop")

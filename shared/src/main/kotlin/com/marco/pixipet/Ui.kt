@@ -1,7 +1,5 @@
 package com.marco.pixipet
 
-import android.graphics.Bitmap
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -14,7 +12,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,9 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -53,7 +48,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -87,7 +81,7 @@ fun PixiPetApp(game: PixiGame) {
         }
     }
 
-    BackHandler(enabled = game.canGoBack()) { game.back() }
+    Platform.host.BackHandlerCompat(enabled = game.canGoBack()) { game.back() }
 
     val body = shellColor(game.shellIdx)
     val light = tone(body, 0.5f, Color.White)
@@ -113,7 +107,7 @@ fun PixiPetApp(game: PixiGame) {
         BoxWithConstraints(
             Modifier
                 .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.systemBars)
+                .then(Platform.host.insetsModifier())
         ) {
             val landscape = maxWidth > maxHeight * 1.05f
             if (landscape) {
@@ -412,29 +406,6 @@ private fun ItemCard(item: Item, selected: Boolean, tile: Boolean, onClick: () -
     }
 }
 
-@Composable
-private fun EggChoice(i: Int, selected: Boolean, onClick: () -> Unit) {
-    val img = remember(i) {
-        val s = makePet(Stage.EGG, 0, i, M_NORMAL, false, false, 0, false)
-        Bitmap.createBitmap(s.px, 44, 46, Bitmap.Config.ARGB_8888).asImageBitmap()
-    }
-    val shape = RoundedCornerShape(10.dp)
-    Canvas(
-        Modifier
-            .size(width = 50.dp, height = 52.dp)
-            .clip(shape)
-            .background(if (selected) Color(0x33FFB3D1) else Color.Transparent)
-            .border(if (selected) 2.dp else 1.dp, if (selected) Gold else Color(0x33888888), shape)
-            .clickable { onClick() }
-    ) {
-        drawImage(
-            img,
-            dstSize = IntSize(size.width.toInt(), size.height.toInt()),
-            filterQuality = FilterQuality.None
-        )
-    }
-}
-
 /** Le icone sono le stesse disegnate a pixel per lo schermo di gioco. */
 @Composable
 private fun PixelIcon(id: Int, food: Int, dp: Dp) {
@@ -442,7 +413,7 @@ private fun PixelIcon(id: Int, food: Int, dp: Dp) {
     val img = remember(id, food) {
         val f = Fb(12, 12)
         if (food >= 0) drawFood(f, food, 1, 1) else drawIcon(f, id, 1, 1)
-        Bitmap.createBitmap(f.px, 12, 12, Bitmap.Config.ARGB_8888).asImageBitmap()
+        Platform.host.toImage(f.px, 12, 12)
     }
     Canvas(Modifier.size(dp)) {
         drawImage(
@@ -583,7 +554,7 @@ private fun ShellButton(
 
 @Composable
 private fun NameKeyboard(game: PixiGame, modifier: Modifier) {
-    val rows = listOf("ABCDEFGHI", "JKLMNOPQR", "STUVWXYZ0", "123456789")
+    val rows = listOf("1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM")
     Column(modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         for (r in rows) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {

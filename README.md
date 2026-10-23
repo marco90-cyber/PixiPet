@@ -46,3 +46,6 @@ uccide/resuscita e invia una notifica di prova.
 - Nuovi giochi: Rimbalzo (pallina e barra) e Memoria (ripeti la sequenza di colori); Alto-Basso rimosso.
 - Nuovi cibi: pasta e pollo. Voce INFORMAZIONI nelle opzioni. Scuola: SCUOLA 2 ORE riempie la barra mente (richiamando prima non si ottiene nulla).
 - Nome e scelta dell'uovo ora sono schermate del gioco (tastiera a tasti nel pannello). Gli sfondi comprati restano tuoi per sempre. Il menu DEBUG compare solo se il pet si chiama TEST1990.
+
+## Android e Windows
+Il codice del gioco è unico (cartella `shared`): ogni modifica vale sia per Android (`app`) sia per Windows (`desktop`). Le release si creano con un tag `vX.Y.Z` e contengono l'APK e lo zip portable per Windows. La versione si cambia solo in `shared/.../Version.kt`.
