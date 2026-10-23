@@ -16,6 +16,40 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var game: PixiGame
 
+    private var pendingText = ""
+    private var pendingSave: ((Boolean) -> Unit)? = null
+    private var pendingOpen: ((String?) -> Unit)? = null
+
+    private val createDoc =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+            val done = pendingSave
+            pendingSave = null
+            var ok = false
+            if (uri != null) {
+                try {
+                    contentResolver.openOutputStream(uri, "wt")?.use { it.write(pendingText.toByteArray()) }
+                    ok = true
+                } catch (e: Throwable) {
+                }
+            }
+            pendingText = ""
+            done?.invoke(ok)
+        }
+
+    private val openDoc =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            val done = pendingOpen
+            pendingOpen = null
+            var text: String? = null
+            if (uri != null) {
+                try {
+                    text = contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                } catch (e: Throwable) {
+                }
+            }
+            done?.invoke(text)
+        }
+
     private val permLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
@@ -25,7 +59,17 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
         )
-        Platform.host = AndroidHost(applicationContext)
+        val host = AndroidHost(applicationContext)
+        host.saver = { name, text, done ->
+            pendingText = text
+            pendingSave = done
+            createDoc.launch(name)
+        }
+        host.opener = { done ->
+            pendingOpen = done
+            openDoc.launch(arrayOf("text/plain", "*/*"))
+        }
+        Platform.host = host
         game = PixiGame()
         setContent { PixiPetApp(game) }
 

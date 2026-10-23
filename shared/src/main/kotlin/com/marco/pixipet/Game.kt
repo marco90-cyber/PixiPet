@@ -336,8 +336,8 @@ class PixiGame {
                     showShell = !showShell
                     prefs.edit().putBoolean("showShell", showShell).apply()
                 },
-                Item("ESPORTA DATI") { exportSave() },
-                Item("IMPORTA DATI") { importSave() },
+                Item("SALVA PARTITA") { exportSave() },
+                Item("CARICA PARTITA") { importSave() },
                 Item(if (confirmReset) "SICURO? TOCCA ANCORA" else "NUOVO UOVO") {
                     if (confirmReset) newPet() else confirmReset = true
                 },
@@ -725,25 +725,34 @@ class PixiGame {
 
     private fun exportSave() {
         try {
-            val s = Base64.getEncoder().encodeToString(pet.toJson().toString().toByteArray())
-            Platform.host.copyText(s)
-            say("COPIATO")
+            val code = Base64.getEncoder().encodeToString(pet.toJson().toString().toByteArray())
+            val text = "PIXIPET-SAVE-1\n$code\n"
+            Platform.host.saveFile("pixipet-salvataggio.txt", text) { ok ->
+                say(if (ok) "PARTITA SALVATA" else "ANNULLATO")
+            }
         } catch (e: Throwable) {
             say("ERRORE")
         }
     }
 
     private fun importSave() {
-        try {
-            val t = Platform.host.pasteText()
-            val j = JSONObject(String(Base64.getMimeDecoder().decode(t.trim())))
-            pet = Pet.fromJson(j)
-            lastStage = pet.stage(now())
-            scr = Scr.HOME
-            commit()
-            say("CARICATO")
-        } catch (e: Throwable) {
-            say("CODICE ERRATO")
+        Platform.host.openFile { t ->
+            if (t == null) {
+                say("ANNULLATO")
+            } else {
+                try {
+                    val code = t.lines().filter { it.isNotBlank() && !it.startsWith("PIXIPET") }.joinToString("")
+                    val j = JSONObject(String(Base64.getMimeDecoder().decode(code.trim())))
+                    pet = Pet.fromJson(j)
+                    lastStage = pet.stage(now())
+                    scr = Scr.HOME
+                    cursor = 0
+                    commit()
+                    say("PARTITA CARICATA")
+                } catch (e: Throwable) {
+                    say("FILE NON VALIDO")
+                }
+            }
         }
     }
 
@@ -1449,7 +1458,7 @@ val INFO_LINES = listOf(
     "AUTORE: ideato da Marco e realizzato insieme a Claude (Anthropic).",
     "GRAFICA: tutti i personaggi, le stanze e le icone sono disegnati a pixel dentro il gioco.",
     "DATI: il salvataggio resta solo sul tuo dispositivo. Non servono account. Internet serve solo per controllare gli aggiornamenti.",
-    "TRASFERIMENTO: ESPORTA DATI copia il salvataggio, IMPORTA DATI lo ripristina su un altro telefono.",
+    "SALVATAGGIO: SALVA PARTITA crea un file .txt, CARICA PARTITA lo riapre. Lo stesso file funziona su Android e su Windows.",
     "PERMESSI: su Android serve solo quello per le notifiche, che puoi spegnere dalle opzioni.",
     "AGGIORNAMENTI: in OPZIONI usa CONTROLLA AGGIORNAMENTI: se c'è una nuova versione ti porta alla pagina per scaricarla.",
     "WINDOWS: la versione portable non si installa, basta aprire PixiPet.exe. Esc torna indietro, frecce e Invio sono i tre tasti.",

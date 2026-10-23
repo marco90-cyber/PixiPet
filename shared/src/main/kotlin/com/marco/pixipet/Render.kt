@@ -506,8 +506,13 @@ private fun PixiGame.drawNameScr(now: Long) {
     f.textC("IL TUO PET?", 15, PINK)
     f.rect(4, 28, 72, 20, PANEL)
     f.frame(4, 28, 72, 20, PINK)
-    val cur = if (nameBuf.length < 8 && (now / 450L) % 2L == 0L) "_" else ""
-    f.textC(nameBuf + cur, 34, WHITE, 2)
+    // Ogni lettera ha la sua casella fissa: quando scrivi le altre non si spostano.
+    for (i in 0 until 8) {
+        val x = 10 + i * 8
+        if (i < nameBuf.length) f.text(nameBuf[i].toString(), x, 32, WHITE, 2)
+        val cursor = i == nameBuf.length && (now / 450L) % 2L == 0L
+        f.rect(x, 42, 6, 1, if (i < nameBuf.length) PANEL2 else if (cursor) WHITE else PANEL2)
+    }
     f.textC("NON POTRA' PIU'", 56, GRAY)
     f.textC("ESSERE CAMBIATO", 63, GRAY)
 }

@@ -5,6 +5,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import java.awt.Desktop
+import java.awt.FileDialog
+import java.awt.Frame
 import java.awt.Toolkit
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.StringSelection
@@ -78,6 +80,38 @@ class DesktopHost : PlatformHost {
 
     override fun copyText(t: String) {
         Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(t), null)
+    }
+
+    override fun saveFile(suggestedName: String, text: String, done: (Boolean) -> Unit) {
+        Thread {
+            var ok = false
+            try {
+                val d = FileDialog(null as Frame?, "Salva partita", FileDialog.SAVE)
+                d.file = suggestedName
+                d.isVisible = true
+                val f = d.file
+                if (f != null) {
+                    File(d.directory, f).writeText(text, Charsets.UTF_8)
+                    ok = true
+                }
+            } catch (e: Throwable) {
+            }
+            done(ok)
+        }.start()
+    }
+
+    override fun openFile(done: (String?) -> Unit) {
+        Thread {
+            var text: String? = null
+            try {
+                val d = FileDialog(null as Frame?, "Carica partita", FileDialog.LOAD)
+                d.isVisible = true
+                val f = d.file
+                if (f != null) text = File(d.directory, f).readText(Charsets.UTF_8)
+            } catch (e: Throwable) {
+            }
+            done(text)
+        }.start()
     }
 
     override fun pasteText(): String = try {

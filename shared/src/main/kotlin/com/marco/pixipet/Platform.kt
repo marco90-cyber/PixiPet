@@ -26,6 +26,8 @@ interface PlatformHost {
     fun beep()
     fun copyText(t: String)
     fun pasteText(): String
+    fun saveFile(suggestedName: String, text: String, done: (Boolean) -> Unit)
+    fun openFile(done: (String?) -> Unit)
     fun toImage(px: IntArray, w: Int, h: Int): ImageBitmap
     fun openUrl(url: String)
     fun httpGet(url: String): String?

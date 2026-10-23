@@ -558,7 +558,10 @@ private fun NameKeyboard(game: PixiGame, modifier: Modifier) {
     Column(modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         for (r in rows) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                val pad = (10 - r.length) / 2f
+                if (pad > 0f) Spacer(Modifier.weight(pad))
                 for (c in r) KeyCap(c.toString(), Modifier.weight(1f)) { game.nameKey(c) }
+                if (pad > 0f) Spacer(Modifier.weight(pad))
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {

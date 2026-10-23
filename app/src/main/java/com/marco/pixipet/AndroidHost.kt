@@ -58,6 +58,19 @@ class AndroidHost(private val ctx: Context) : PlatformHost {
         cm.setPrimaryClip(ClipData.newPlainText("PixiPet", t))
     }
 
+    var saver: ((String, String, (Boolean) -> Unit) -> Unit)? = null
+    var opener: (((String?) -> Unit) -> Unit)? = null
+
+    override fun saveFile(suggestedName: String, text: String, done: (Boolean) -> Unit) {
+        val s = saver
+        if (s == null) done(false) else s(suggestedName, text, done)
+    }
+
+    override fun openFile(done: (String?) -> Unit) {
+        val o = opener
+        if (o == null) done(null) else o(done)
+    }
+
     override fun pasteText(): String {
         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         return cm.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
