@@ -33,17 +33,7 @@ class Fb(val w: Int, val h: Int) {
     fun get(x: Int, y: Int): Int = if (x >= 0 && y >= 0 && x < w && y < h) px[y * w + x] else 0
 
     fun rect(x: Int, y: Int, rw: Int, rh: Int, c: Int) {
-        if (rw <= 0 || rh <= 0) return
-        val left = x.coerceAtLeast(0)
-        val top = y.coerceAtLeast(0)
-        val right = (x + rw).coerceAtMost(w)
-        val bottom = (y + rh).coerceAtMost(h)
-        if (left >= right || top >= bottom) return
-
-        for (row in top until bottom) {
-            val start = row * w + left
-            px.fill(c, start, start + right - left)
-        }
+        for (j in y until y + rh) for (i in x until x + rw) set(i, j, c)
     }
 
     fun frame(x: Int, y: Int, rw: Int, rh: Int, c: Int) {
