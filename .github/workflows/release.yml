@@ -44,6 +44,18 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.7
+      - name: Chiave di firma
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KS_B64" ] || [ -z "$KS_PW" ]; then
+            echo "Mancano i segreti ANDROID_KEYSTORE_BASE64 e ANDROID_KEYSTORE_PASSWORD su GitHub (Settings > Secrets and variables > Actions)." >&2
+            exit 1
+          fi
+          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/pixipet.jks"
+          echo "PIXIPET_KEYSTORE=$RUNNER_TEMP/pixipet.jks" >> "$GITHUB_ENV"
+          echo "PIXIPET_KEYSTORE_PASSWORD=$KS_PW" >> "$GITHUB_ENV"
       - name: Build release APK
         run: gradle :app:assembleRelease --no-daemon
       - name: Rename

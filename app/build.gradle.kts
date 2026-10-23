@@ -18,12 +18,16 @@ android {
         versionName = ver
     }
 
+    // La chiave di firma e' privata: arriva da variabili d'ambiente (segreti di GitHub), mai dal repository.
+    val ksPath = System.getenv("PIXIPET_KEYSTORE")
     signingConfigs {
-        create("pixipet") {
-            storeFile = file("pixipet-release.jks")
-            storePassword = "pixipet-release"
-            keyAlias = "pixipet"
-            keyPassword = "pixipet-release"
+        if (ksPath != null) {
+            create("pixipet") {
+                storeFile = file(ksPath)
+                storePassword = System.getenv("PIXIPET_KEYSTORE_PASSWORD")
+                keyAlias = "pixipet"
+                keyPassword = System.getenv("PIXIPET_KEYSTORE_PASSWORD")
+            }
         }
     }
 
@@ -36,7 +40,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("pixipet")
+            signingConfig = signingConfigs.findByName("pixipet") ?: signingConfigs.getByName("debug")
         }
     }
 
