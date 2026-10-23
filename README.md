@@ -34,6 +34,7 @@ uccide/resuscita e invia una notifica di prova.
 
 ## Novita' (ultima versione)
 - Gioco interamente in italiano.
+- Prima di poter lavorare (fase adolescente) ogni attività breve (mangiare, bagno, pulire, coccole, studio, palla) dà 1 moneta.
 - Nome scelto al primo avvio (e a ogni nuovo uovo), non modificabile; in DEBUG c è MODIFICA NOME. Statistiche sotto il menu; debug con voci + e -.
 - Quando l'animaletto dorme, la finestra mostra la notte con luna e stelle che brillano.
 - Se una statistica e' al 97% o piu', l'animaletto rifiuta di ripetere quell'azione (scuote la testa e dice NO).

@@ -667,6 +667,13 @@ class PixiGame(val ctx: Context) {
                 say("IMMORTALE!")
             }
         }
+        // Finché non può andare a lavorare (prima dell'adolescenza) ogni attività da 5 secondi dà 1 moneta.
+        if (a.kind in intArrayOf(A_FEED, A_BATH, A_CLEAN, A_PET, A_STUDY, A_BALL) &&
+            !pet.stage(now()).atLeast(Stage.TEEN)
+        ) {
+            pet.coins += 1
+            say("+1 MONETA")
+        }
         anim = null
         scr = a.back
         cursor = 0
