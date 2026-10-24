@@ -1,6 +1,11 @@
 package com.marco.pixipet
 
+import org.json.JSONArray
 import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 import kotlin.random.Random
 
 enum class Stage(val label: String) {
@@ -27,6 +32,17 @@ object Cfg {
     const val TEEN_MIN = 1440f
     const val ADULT_MIN = 4320f
     const val DEATH_MIN = 5760f
+    const val STARVE_DEATH = 300f // minuti a fame zero prima di morire
+    const val SICK_DEATH = 360f // minuti di malattia prima di morire
+    const val WARN_BEFORE = 60f // avviso d'emergenza: 1 ora prima
+}
+
+/** Notte protetta: dalle 22 alle 8 il pet dorme e non rischia di morire per mancanza di cure. */
+fun isProtectedHour(ms: Long): Boolean {
+    val c = Calendar.getInstance()
+    c.timeInMillis = ms
+    val h = c.get(Calendar.HOUR_OF_DAY)
+    return h >= 22 || h < 8
 }
 
 class Food(val name: String, val price: Int, val hunger: Float, val happy: Float, val weight: Int, val kind: Int)
@@ -80,6 +96,13 @@ class Pet(var bornAt: Long) {
     var named = true
     var eggPicked = true
     var bg = 0
+    var nightOn = false
+    val events = ArrayList<String>()
+
+    fun log(at: Long, msg: String) {
+        events.add(SimpleDateFormat("dd/MM HH:mm", Locale.ITALY).format(Date(at)) + " " + msg)
+        while (events.size > 60) events.removeAt(0)
+    }
 
     fun ageMin(now: Long): Float {
         val end = if (dead) diedAt else now
@@ -179,6 +202,7 @@ class Pet(var bornAt: Long) {
     }
 
     private fun die(why: String, at: Long) {
+        log(at, "MORTE ($why) FAME ${hunger.toInt()} PUL ${hygiene.toInt()} FEL ${happy.toInt()} EN ${energy.toInt()}")
         dead = true
         cause = why
         diedAt = at
@@ -194,6 +218,27 @@ class Pet(var bornAt: Long) {
         if (age < Cfg.EGG_MIN) return
         if (!immortal && age >= Cfg.DEATH_MIN) {
             die("VECCHIAIA", at)
+            return
+        }
+
+        // Notte protetta (22-8): dorme, consumi minimi, niente malattie e nessun rischio di morte per cure mancate.
+        val night = isProtectedHour(at)
+        if (night != nightOn) {
+            nightOn = night
+            if (night) {
+                sleeping = true
+                log(at, "NOTTE: SI ADDORMENTA")
+            } else {
+                sleeping = false
+                log(at, "MATTINA: SI SVEGLIA")
+            }
+        }
+        if (night) {
+            hunger -= 0.1f
+            hygiene -= 0.05f
+            happy -= 0.02f
+            energy += 0.5f
+            clamp()
             return
         }
 
@@ -222,12 +267,14 @@ class Pet(var bornAt: Long) {
             val risk = hygiene < 15f || poops >= 3 || hunger < 8f
             if ((risk && rnd.nextInt(60) == 0) || rnd.nextInt(2500) == 0) {
                 sick = true
+                log(at, "SI AMMALA (FAME ${hunger.toInt()} PUL ${hygiene.toInt()} CACCHE $poops)")
                 careMistakes++
             }
         } else {
             sickMin += 1f
             happy -= 0.4f
-            if (sickMin >= 240f && !immortal) {
+            if (sickMin == Cfg.SICK_DEATH - Cfg.WARN_BEFORE) log(at, "ALLARME: 1 ORA ALLA MORTE PER MALATTIA")
+            if (sickMin >= Cfg.SICK_DEATH && !immortal) {
                 clamp()
                 die("MALATTIA", at)
                 return
@@ -235,8 +282,10 @@ class Pet(var bornAt: Long) {
         }
 
         if (hunger <= 0f) {
+            if (starveMin == 0f) log(at, "FAME A ZERO")
             starveMin += 1f
-            if (starveMin >= 180f && !immortal) {
+            if (starveMin == Cfg.STARVE_DEATH - Cfg.WARN_BEFORE) log(at, "ALLARME: 1 ORA ALLA MORTE PER FAME")
+            if (starveMin >= Cfg.STARVE_DEATH && !immortal) {
                 clamp()
                 die("FAME", at)
                 return
@@ -267,7 +316,8 @@ class Pet(var bornAt: Long) {
         put("gen", generation); put("coins", coins); put("candy", candy); put("pers", pers)
         put("cFood", cFood); put("cStudy", cStudy); put("cPlay", cPlay); put("cPet", cPet)
         put("immortal", immortal); put("angel", angel); put("awayUntil", awayUntil); put("awayKind", awayKind)
-        put("dates", dates); put("games", games); put("named", named); put("eggPicked", eggPicked); put("bg", bg)
+        put("dates", dates); put("games", games); put("named", named); put("eggPicked", eggPicked); put("bg", bg); put("nightOn", nightOn)
+        put("events", JSONArray(events))
     }
 
     companion object {
@@ -310,6 +360,8 @@ class Pet(var bornAt: Long) {
             p.named = j.optBoolean("named", true)
             p.eggPicked = j.optBoolean("eggPicked", true)
             p.bg = j.optInt("bg", 0)
+            p.nightOn = j.optBoolean("nightOn", false)
+            j.optJSONArray("events")?.let { a -> for (i in 0 until a.length()) p.events.add(a.optString(i)) }
             return p
         }
     }

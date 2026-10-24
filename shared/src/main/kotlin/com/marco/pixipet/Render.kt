@@ -13,7 +13,7 @@ fun PixiGame.render(now: Long) {
     hits.clear()
     f.clear(PANEL)
     when (scr) {
-        Scr.HOME, Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.DEBUG, Scr.STATS, Scr.BG, Scr.INFO -> {
+        Scr.HOME, Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.DEBUG, Scr.STATS, Scr.BG, Scr.INFO, Scr.LOG -> {
             val theme = if (scr == Scr.BG && cursor in ROOM_NAMES.indices) cursor else pet.bg
             drawRoom(f, now, isNight() || pet.sleeping, theme)
             drawHomeScene(now)

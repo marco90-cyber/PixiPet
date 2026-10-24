@@ -13,7 +13,7 @@ import kotlin.random.Random
 
 enum class Scr {
     HOME, MENU, FOOD, PLAYLIST, MAP, STATS, BG, SETTINGS, PARK, SCHOOL, STAND, UNDER,
-    ANIM, G_CATCH, G_HILO, G_SWING, G_BOUNCE, G_MEM, G_END, DEAD, DEBUG, INFO, NAME, EGG
+    ANIM, G_CATCH, G_HILO, G_SWING, G_BOUNCE, G_MEM, G_END, DEAD, DEBUG, INFO, NAME, EGG, LOG
 }
 
 const val A_FEED = 1
@@ -32,7 +32,7 @@ const val A_REFUSE = 12
 val SHELLS = longArrayOf(0xFFB3D1L, 0x9FE3C8L, 0x9CCBFFL, 0xFFE38AL, 0xC7B3FFL, 0xFFB98AL, 0xF2F2F2L)
 
 fun homeLike(s: Scr): Boolean = when (s) {
-    Scr.HOME, Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.DEBUG, Scr.STATS, Scr.BG, Scr.INFO -> true
+    Scr.HOME, Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.DEBUG, Scr.STATS, Scr.BG, Scr.INFO, Scr.LOG -> true
     else -> false
 }
 
@@ -143,7 +143,7 @@ class PixiGame {
 
     fun hour(): Int = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
 
-    fun isNight(): Boolean = hour() >= 21 || hour() < 7
+    fun isNight(): Boolean = isProtectedHour(now())
 
     fun away(): Boolean = pet.awayKind != 0
 
@@ -304,6 +304,9 @@ class PixiGame {
 
             Scr.NAME -> emptyList()
 
+            Scr.LOG -> (if (pet.events.isEmpty()) listOf("NESSUN EVENTO") else pet.events.reversed())
+                .map { Item(it) {} } + Item("INDIETRO", icon = 10) { open(Scr.DEBUG) }
+
             Scr.EGG -> PERS.indices.map { i ->
                 Item("UOVO ${EGG_COLORS[i]}", PERS[i]) { eggSel = i }
             } + Item("SCEGLI QUESTO UOVO") { pickEgg(eggView()) }
@@ -347,6 +350,7 @@ class PixiGame {
             )
 
             Scr.DEBUG -> listOf(
+                Item("LOG EVENTI") { open(Scr.LOG) },
                 Item("MODIFICA NOME") { showRename = true },
                 Item("FASE SUCCESSIVA") { dbgNextStage() },
                 Item("ETÀ +1 ORA") { dbgShift(60, false) },
@@ -563,7 +567,7 @@ class PixiGame {
         when (scr) {
             Scr.ANIM -> {}
             Scr.STATS -> {}
-            Scr.HOME, Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.DEBUG, Scr.BG, Scr.INFO -> {
+            Scr.HOME, Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.DEBUG, Scr.BG, Scr.INFO, Scr.LOG -> {
                 val st = pet.stage(now())
                 if (!pet.sleeping && !away() && st != Stage.EGG) {
                     beep()
@@ -758,6 +762,7 @@ class PixiGame {
 
     fun newPet() {
         val g = if (pet.dead) pet.generation + 1 else 1
+        val old = pet.events.takeLast(20)
         pet = newPetObj(now(), g)
         scr = Scr.NAME
         nameBuf = ""
@@ -765,6 +770,8 @@ class PixiGame {
         anim = null
         lastStage = Stage.EGG
         petX = 40f
+        pet.events.addAll(0, old)
+        pet.events.add("--- NUOVO PET ---")
         commit()
     }
 
@@ -876,6 +883,7 @@ class PixiGame {
     /** Richiamo anticipato: nessun premio. */
     private fun callBack() {
         if (now() < pet.awayUntil) {
+            pet.log(now(), "RICHIAMATO: NESSUN PREMIO")
             pet.cancelAway()
             say("RICHIAMATO")
             commit()
@@ -885,6 +893,7 @@ class PixiGame {
     }
 
     private fun startSchool() {
+        pet.log(now(), "VA A SCUOLA (2 ORE)")
         pet.awayKind = 5
         pet.awayUntil = now() + 2 * 3600000L
         scr = Scr.HOME
@@ -894,6 +903,7 @@ class PixiGame {
     }
 
     private fun startWork(min: Int) {
+        pet.log(now(), "VA A LAVORARE ($min MIN)")
         pet.awayKind = if (min >= 30) 4 else 3
         pet.awayUntil = now() + min * 60000L
         scr = Scr.HOME
@@ -975,6 +985,7 @@ class PixiGame {
     }
 
     private fun dbgKill() {
+        pet.log(now(), "DEBUG: UCCISO")
         pet.dead = true
         pet.cause = "DEBUG"
         pet.diedAt = now()
@@ -1003,6 +1014,8 @@ class PixiGame {
 
     fun onResume() {
         pet = loadPet()
+        val fuori = (now() - pet.lastTick) / 60000L
+        if (fuori >= 5L) pet.log(now(), "APP APERTA: $fuori MIN DI ASSENZA")
         lastStage = pet.stage(now())
         Platform.host.onResume(pet, now())
     }
@@ -1317,6 +1330,7 @@ class PixiGame {
     // --------------------------------------------------------------- ciclo
 
     private fun onStage(st: Stage, n: Long) {
+        pet.log(n, "FASE: ${st.label}")
         if (st != Stage.EGG) {
             say(if (lastStage == Stage.EGG) "E' NATO!" else "E' CRESCIUTO!")
             beep()
@@ -1403,6 +1417,7 @@ class PixiGame {
         Scr.G_BOUNCE -> "RIMBALZO"
         Scr.G_MEM -> "MEMORIA"
         Scr.INFO -> "INFORMAZIONI"
+        Scr.LOG -> "LOG EVENTI"
         Scr.G_SWING -> "BATTUTA"
         Scr.G_END -> "RISULTATO"
         Scr.DEAD -> "R.I.P."
@@ -1412,7 +1427,7 @@ class PixiGame {
     }
 
     fun canGoBack(): Boolean = when (scr) {
-        Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.STATS, Scr.DEBUG, Scr.BG, Scr.INFO,
+        Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.STATS, Scr.DEBUG, Scr.BG, Scr.INFO, Scr.LOG,
         Scr.PARK, Scr.SCHOOL, Scr.STAND, Scr.UNDER -> true
         else -> false
     }
@@ -1421,6 +1436,7 @@ class PixiGame {
         when (scr) {
             Scr.MENU, Scr.FOOD, Scr.PLAYLIST, Scr.MAP, Scr.SETTINGS, Scr.STATS, Scr.BG -> open(Scr.HOME)
             Scr.DEBUG, Scr.INFO -> open(Scr.SETTINGS)
+            Scr.LOG -> open(Scr.DEBUG)
             Scr.PARK, Scr.SCHOOL, Scr.STAND, Scr.UNDER -> open(Scr.MAP)
             else -> {}
         }
@@ -1449,6 +1465,8 @@ val INFO_LINES = listOf(
     "CARAMELLE: 10 aprono l'Aldilà, 30 fanno diventare angelo e immortale.",
     "MAPPA: Parco, Scuola, Bancarella e Aldilà. Dai genitori o in vacanza l'animaletto sta via per un po'.",
     "CARATTERE: dolce, furbo, sportivo, goloso o burbero. Dipende dall'uovo scelto e dà un piccolo bonus.",
+    "NOTTE: dalle 22 alle 8 il pet dorme da solo, consuma pochissimo e non rischia di morire per cure mancate. Le notifiche di notte arrivano solo per le emergenze.",
+    "PERICOLO: a fame zero muore dopo 5 ore, da malato dopo 6. Un'ora prima arriva una notifica d'emergenza (solo su Android).",
     "RIFIUTO: se una statistica è al 97% o più, l'animaletto non ripete quell'azione.",
     "SFONDO: 5 stanze da 50 monete. Di notte, o quando dorme, la finestra mostra luna e stelle.",
     "NOTIFICHE: ti avvisano se ha fame, è sporco, malato, dorme o torna a casa.",

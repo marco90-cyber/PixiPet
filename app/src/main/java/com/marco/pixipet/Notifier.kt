@@ -111,22 +111,25 @@ object Notifier {
         if (p.sick) f = f or F_SICK
         if (p.happy < 25f) f = f or F_SAD
         if (p.energy < 25f && !p.sleeping) f = f or F_TIRED
-        if (!p.immortal && (p.starveMin >= 120f || p.sickMin >= 180f)) f = f or F_DYING
+        if (!p.immortal && (p.starveMin >= Cfg.STARVE_DEATH - Cfg.WARN_BEFORE || p.sickMin >= Cfg.SICK_DEATH - Cfg.WARN_BEFORE)) f = f or F_DYING
         return f
     }
 
-    private class Entry(val flag: Int, val id: Int, val title: (String) -> String, val text: String)
+    private class Entry(val flag: Int, val id: Int, val title: (String) -> String, val text: (Pet) -> String)
 
     private val ENTRIES = listOf(
-        Entry(F_HUNGRY, 1, { "$it ha fame" }, "Dagli da mangiare prima che si indebolisca."),
-        Entry(F_STARVING, 2, { "$it sta morendo di fame!" }, "La pancia e' vuota: sfamalo subito."),
-        Entry(F_DIRTY, 3, { "$it e' sporco" }, "Fagli un bagno: puzza e rischia di ammalarsi."),
-        Entry(F_POOP, 4, { "Cacche da pulire" }, "C'e' da fare pulizia in casa."),
-        Entry(F_SICK, 5, { "$it e' malato" }, "Serve la medicina (menu MEDS)."),
-        Entry(F_SAD, 6, { "$it e' triste" }, "Gioca con lui o fagli due coccole."),
-        Entry(F_TIRED, 7, { "$it e' stanco" }, "Spegni la luce per farlo dormire."),
-        Entry(F_DYING, 8, { "$it e' in pericolo!" }, "Se non lo curi presto potrebbe morire."),
-        Entry(F_DEAD, 9, { "$it e' morto" }, "Apri l'app per far nascere un nuovo uovo.")
+        Entry(F_HUNGRY, 1, { "$it ha fame" }) { "Dagli da mangiare prima che si indebolisca." },
+        Entry(F_STARVING, 2, { "$it sta morendo di fame!" }) { "La pancia e' vuota: sfamalo subito." },
+        Entry(F_DIRTY, 3, { "$it e' sporco" }) { "Fagli un bagno: puzza e rischia di ammalarsi." },
+        Entry(F_POOP, 4, { "Cacche da pulire" }) { "C'e' da fare pulizia in casa." },
+        Entry(F_SICK, 5, { "$it e' malato" }) { "Serve la medicina (menu CURA)." },
+        Entry(F_SAD, 6, { "$it e' triste" }) { "Gioca con lui o fagli due coccole." },
+        Entry(F_TIRED, 7, { "$it e' stanco" }) { "Falla dormire dal menu DORMI." },
+        Entry(F_DYING, 8, { "ATTENZIONE: $it sta per morire!" }) {
+            val causa = if (it.sickMin >= Cfg.SICK_DEATH - Cfg.WARN_BEFORE) "della malattia: dagli la cura" else "di fame: dagli da mangiare"
+            "Gli resta circa 1 ora. Se non lo aiuti subito morira' $causa."
+        },
+        Entry(F_DEAD, 9, { "$it e' morto" }) { "Apri l'app per far nascere un nuovo uovo." }
     )
 
     private fun describe(flags: Int): String {
@@ -156,17 +159,20 @@ object Notifier {
         val cur = flagsFor(p, now)
         val on = notify && sp.getBoolean("notify", true)
 
+        // Di notte (22-8) niente notifiche, tranne l'emergenza e la morte: le altre arrivano al mattino.
+        val quiet = isProtectedHour(now)
         val added = cur and prev.inv()
         for (e in ENTRIES) {
             if (cur and e.flag != 0) {
-                if (on && added and e.flag != 0) post(ctx, e.id, e.title(p.name), e.text)
+                val allowed = on && (!quiet || e.flag == F_DYING || e.flag == F_DEAD)
+                if (allowed && added and e.flag != 0) post(ctx, e.id, e.title(p.name), e.text(p))
             } else {
                 cancel(ctx, e.id)
             }
         }
 
         if (prev and F_ASLEEP != 0 && cur and F_ASLEEP == 0 && !p.dead && p.awayKind == 0) {
-            if (on) post(ctx, ID_WOKE, "${p.name} si e' svegliato", "Ha recuperato le energie.")
+            if (on && !quiet) post(ctx, ID_WOKE, "${p.name} si e' svegliato", "Ha recuperato le energie.")
         }
 
         if (p.generation == prevGen && st > prevStage && !p.dead && on) {
@@ -193,18 +199,20 @@ object Notifier {
         val problems = cur and PROBLEMS
         if (problems == 0) {
             cancel(ctx, ID_REMIND)
-        } else if (on && added and PROBLEMS == 0) {
+        } else if (on && !quiet && added and PROBLEMS == 0) {
             val last = sp.getLong("nrem", 0L)
             if (now - last >= REMIND_EVERY_MS) {
                 post(ctx, ID_REMIND, "${p.name} ha bisogno di te", "Problemi: ${describe(problems)}.")
                 sp.edit().putLong("nrem", now).apply()
             }
-        } else if (on && added and PROBLEMS != 0) {
+        } else if (on && !quiet && added and PROBLEMS != 0) {
             sp.edit().putLong("nrem", now).apply()
         }
 
+        // I problemi non annunciati di notte restano "nuovi" e vengono notificati alle 8.
+        val saved = if (quiet && on) cur and (prev or F_DYING or F_DEAD or F_ASLEEP) else cur
         sp.edit()
-            .putInt("nflags", cur)
+            .putInt("nflags", saved)
             .putInt("nstage", st)
             .putInt("naway", p.awayKind)
             .putInt("ngen", p.generation)
@@ -262,6 +270,8 @@ object Notifier {
             val sr = if (asleep) 0.1f else 0.45f
             if (p.happy >= 25f) cand((p.happy - 25f) / sr)
             if (asleep) cand((100f - p.energy) / 1.5f) else if (p.energy >= 25f) cand((p.energy - 25f) / 0.5f)
+            if (p.hunger <= 0f && !p.immortal) cand(Cfg.STARVE_DEATH - Cfg.WARN_BEFORE - p.starveMin)
+            if (p.sick && !p.immortal) cand(Cfg.SICK_DEATH - Cfg.WARN_BEFORE - p.sickMin)
         }
         return best.coerceAtLeast(2L * 60000L)
     }

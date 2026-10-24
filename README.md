@@ -49,3 +49,4 @@ uccide/resuscita e invia una notifica di prova.
 
 ## Android e Windows
 Il codice del gioco è unico (cartella `shared`): ogni modifica vale sia per Android (`app`) sia per Windows (`desktop`). Le release si creano con un tag `vX.Y.Z` e contengono l'APK e lo zip portable per Windows. La versione si cambia solo in `shared/.../Version.kt`.
+- Notte protetta 22-8, morte più lenta (5 ore a fame zero, 6 da malato), notifica d'emergenza 1 ora prima, LOG EVENTI nel debug.
