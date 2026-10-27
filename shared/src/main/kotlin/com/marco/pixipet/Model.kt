@@ -213,6 +213,8 @@ class Pet(var bornAt: Long) {
         val at = lastTick + 60000L
         lastTick = at
         if (dead) return
+        // Finché non ha nome e uovo scelto la vita non è ancora iniziata.
+        if (!named || !eggPicked) return
         if (awayKind != 0 && at <= awayUntil) return
         val age = ageMin(at)
         if (age < Cfg.EGG_MIN) return

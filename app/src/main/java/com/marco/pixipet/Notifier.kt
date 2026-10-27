@@ -99,6 +99,7 @@ object Notifier {
     // --------------------------------------------------------------- stato
 
     fun flagsFor(p: Pet, now: Long): Int {
+        if (!p.named || !p.eggPicked) return 0
         if (p.dead) return F_DEAD
         if (p.stage(now) == Stage.EGG) return 0
         if (p.awayKind != 0) return 0
@@ -151,6 +152,14 @@ object Notifier {
      */
     fun check(ctx: Context, p: Pet, now: Long, notify: Boolean) {
         val sp = prefs(ctx)
+        if (!p.named || !p.eggPicked) {
+            // Nome o uovo non ancora scelti: la vita non è iniziata, niente notifiche.
+            for (e in ENTRIES) cancel(ctx, e.id)
+            for (id in intArrayOf(ID_STAGE, ID_AWAY, ID_WOKE, ID_REMIND)) cancel(ctx, id)
+            sp.edit().putInt("nflags", 0).putInt("nstage", 0).putInt("naway", 0)
+                .putInt("ngen", p.generation).apply()
+            return
+        }
         val st = p.stage(now).ordinal
         val prev = sp.getInt("nflags", 0)
         val prevStage = sp.getInt("nstage", st)
@@ -224,7 +233,7 @@ object Notifier {
         val sp = prefs(ctx)
         sp.edit()
             .putInt("nflags", flagsFor(p, now) and F_ASLEEP)
-            .putInt("nstage", p.stage(now).ordinal)
+            .putInt("nstage", if (!p.named || !p.eggPicked) 0 else p.stage(now).ordinal)
             .putInt("naway", p.awayKind)
             .putInt("ngen", p.generation)
             .putLong("nrem", now)
@@ -254,6 +263,7 @@ object Notifier {
             }
         }
         if (p.dead) return 60L * 60000L
+        if (!p.named || !p.eggPicked) return 15L * 60000L
         val age = p.ageMin(now)
         for (start in floatArrayOf(Cfg.EGG_MIN, Cfg.BABY_MIN, Cfg.CHILD_MIN, Cfg.TEEN_MIN, Cfg.ADULT_MIN)) {
             if (age < start) cand(start - age)
