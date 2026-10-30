@@ -329,7 +329,8 @@ class PixiGame {
                     },
                     "v$APP_VERSION"
                 ) {
-                    if (updState == 3) Platform.host.openUrl(updUrl) else checkUpdate()
+                    if (Platform.host.inAppUpdate()) Unit
+                    else if (updState == 3) Platform.host.openUrl(updUrl) else checkUpdate()
                 },
                 Item("COLORE GUSCIO") {
                     shellIdx = (shellIdx + 1) % SHELLS.size

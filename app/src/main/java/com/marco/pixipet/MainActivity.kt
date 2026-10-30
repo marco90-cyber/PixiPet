@@ -71,7 +71,10 @@ class MainActivity : ComponentActivity() {
         }
         Platform.host = host
         game = PixiGame()
-        setContent { PixiPetApp(game) }
+        setContent {
+            PixiPetApp(game)
+            androidx.compose.material3.MaterialTheme { AppUpdateHost() }
+        }
 
         Notifier.ensureChannel(this)
         if (Build.VERSION.SDK_INT >= 33 &&

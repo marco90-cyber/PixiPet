@@ -31,6 +31,8 @@ interface PlatformHost {
     fun toImage(px: IntArray, w: Int, h: Int): ImageBitmap
     fun openUrl(url: String)
     fun httpGet(url: String): String?
+    /** Aggiornamento dentro l'app (download e installazione): true se la piattaforma lo gestisce. */
+    fun inAppUpdate(): Boolean = false
     fun notifyTest(name: String)
     fun onResume(pet: Pet, now: Long)
     fun onPause(pet: Pet, now: Long)

@@ -37,6 +37,12 @@ class AndroidPrefs(private val sp: android.content.SharedPreferences) : Prefs {
 class AndroidHost(private val ctx: Context) : PlatformHost {
     override val supportsNotifications = true
 
+    /** Finestra di aggiornamento con Pausa / Riprendi / Annulla (vedi AppUpdate). */
+    override fun inAppUpdate(): Boolean {
+        AppUpdate.open(ctx)
+        return true
+    }
+
     private val tone: ToneGenerator? = try {
         ToneGenerator(AudioManager.STREAM_MUSIC, 35)
     } catch (e: Throwable) {
